@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789276382333,
+      "tag": "0000_large_glorian",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789331474425,
+      "tag": "0001_left_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789404886392,
+      "tag": "0002_thankful_maximus",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789435552160,
+      "tag": "0003_strong_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789480000000,
+      "tag": "0004_fase9_mejoras_integrales",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789518000000,
+      "tag": "0005_fase10_invitacion_personal",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789701351823,
+      "tag": "0006_fase11_membresias_stripe",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789707766687,
+      "tag": "0007_wet_firelord",
+      "breakpoints": true
+    }
+  ]
+}

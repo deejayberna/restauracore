@@ -1,0 +1,1 @@
+ALTER TABLE "movimientos_inventario" ADD COLUMN "foto_path" text;
