@@ -75,13 +75,13 @@ export default function LandingPage() {
 
           <div className="mt-12 flex items-center justify-center gap-6 text-xs sm:text-sm text-neutral-500">
             <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Tarjeta segura con Stripe
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sin tarjeta de crédito
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Cancela cuando quieras
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Acceso completo 14 días
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Soporte en español
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sin compromisos ni contratos
             </span>
           </div>
         </div>

@@ -45,8 +45,7 @@ export default function PreciosPage() {
             Precios justos, sin letras chiquitas
           </h1>
           <p className="mt-4 text-lg text-neutral-600">
-            Escoge el plan ideal para tu restaurante. Puedes actualizar o cancelar en cualquier
-            momento desde el portal de facturación de Stripe.
+            Escoge el plan ideal para tu restaurante. Pruébalo gratis por 14 días sin ingresar tarjeta de crédito ni compromisos.
           </p>
         </div>
 
@@ -167,9 +166,9 @@ export default function PreciosPage() {
             <div className="p-6 rounded-2xl bg-white border border-neutral-200">
               <h3 className="font-bold text-neutral-900">¿Cómo funciona la prueba gratuita de 14 días?</h3>
               <p className="mt-2 text-sm text-neutral-600">
-                Al registrarte, ingresas tus datos y tarjeta mediante la pasarela segura de Stripe.
-                Tienes acceso inmediato y completo a todas las funciones de tu plan elegido. Durante
-                los primeros 14 días no se cobra un solo peso.
+                Al registrarte, comienzas a operar de inmediato sin necesidad de ingresar ninguna tarjeta bancaria ni método de pago.
+                Tienes acceso completo a todas las funciones del plan que elijas. Al finalizar los 14 días, tú decides si deseas
+                adquirir tu membresía para continuar operando.
               </p>
             </div>
 
