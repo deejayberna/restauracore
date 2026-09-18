@@ -77,17 +77,19 @@ export async function POST(req: NextRequest) {
             ),
           });
 
-          await db.insert(logAuditoria).values({
-            restaurante_id: restExistente.id,
-            usuario_id: vinculo?.usuario_id || null,
-            accion: "MEMBRESIA_ACTIVADA_STRIPE",
-            valores_nuevos: {
-              plan: planContratado,
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subId,
-              session_id: session.id,
-            },
-          });
+          if (vinculo) {
+            await db.insert(logAuditoria).values({
+              restaurante_id: restExistente.id,
+              usuario_id: vinculo.usuario_id,
+              accion: "MEMBRESIA_ACTIVADA_STRIPE",
+              valores_nuevos: {
+                plan: planContratado,
+                stripe_customer_id: customerId,
+                stripe_subscription_id: subId,
+                session_id: session.id,
+              },
+            });
+          }
         } else {
           await activarRestaurantePorSesion(session.id);
         }
