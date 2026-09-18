@@ -795,3 +795,84 @@ async function enviarEmailSolicitudCancelacion(payload: SolicitudCancelacionPayl
     throw new Error(`Resend retornó status ${res.status}`);
   }
 }
+
+export interface RecordatorioTrialPayload {
+  restaurante: string;
+  diasRestantes: number;
+  destinatario_email: string | string[];
+  chat_id?: string | null;
+}
+
+export async function enviarNotificacionRecordatorioTrial(
+  payload: RecordatorioTrialPayload
+): Promise<void> {
+  await Promise.allSettled([
+    enviarTelegramRecordatorioTrial(payload),
+    enviarEmailRecordatorioTrial(payload),
+  ]);
+}
+
+async function enviarTelegramRecordatorioTrial(payload: RecordatorioTrialPayload): Promise<void> {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  const chat_id = payload.chat_id ?? process.env.TELEGRAM_CHAT_ID_GERENTE;
+  if (!chat_id) return;
+
+  const diasTexto = payload.diasRestantes === 1 ? "1 día (mañana)" : `${payload.diasRestantes} días`;
+  const texto = [
+    "⏳ *RECORDATORIO: FIN DE PRUEBA GRATUITA*",
+    "",
+    `🏠 Restaurante: *${payload.restaurante}*`,
+    `⚠️ Tu periodo de prueba de 14 días concluye en *${diasTexto}*.`,
+    "",
+    "Para asegurar que tus comandas, comandera KDS e inventarios continúen operando sin interrupción, por favor adquiere tu membresía en el panel de control de RestauraCore.",
+  ].join("\n");
+
+  const res = await fetch(
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id,
+        text: texto,
+        parse_mode: "Markdown",
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Telegram retornó status ${res.status}`);
+  }
+}
+
+async function enviarEmailRecordatorioTrial(payload: RecordatorioTrialPayload): Promise<void> {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return;
+  const destinatarios = normalizarEmails(payload.destinatario_email);
+  if (destinatarios.length === 0) return;
+
+  const diasTexto = payload.diasRestantes === 1 ? "1 día" : `${payload.diasRestantes} días`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: destinatarios.length === 1 ? destinatarios[0] : destinatarios,
+      subject: `⏳ Tu prueba gratuita en RestauraCore finaliza en ${diasTexto} — ${payload.restaurante}`,
+      html: `
+        <h2>⏳ Tu prueba gratuita está por concluir</h2>
+        <p>Hola,</p>
+        <p>Te recordamos que a tu restaurante <strong>${payload.restaurante}</strong> le restan <strong>${diasTexto}</strong> de prueba gratuita en RestauraCore.</p>
+        <p>Para asegurar que tus comandas, personal, cocina e inventarios sigan operando con normalidad y sin bloqueos, te invitamos a contratar tu membresía desde la plataforma.</p>
+        <br/>
+        <p>Equipo RestauraCore</p>
+      `,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Resend retornó status ${res.status}`);
+  }
+}

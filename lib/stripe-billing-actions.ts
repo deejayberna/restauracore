@@ -1,9 +1,100 @@
 "use server";
 
 import { db } from "@/db";
-import { restaurantes, logAuditoria } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { getStripeClient } from "@/lib/stripe";
+import { restaurantes, logAuditoria, usuarios, usuarioRestaurantes } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+import { getStripeClient, STRIPE_PRICES } from "@/lib/stripe";
+import type { Plan } from "@/lib/planes";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+
+/**
+ * Crea una sesión de Stripe Checkout para que un restaurante existente adquiera
+ * o renueve su membresía mensual (tras los 14 días gratis o para upgrade).
+ */
+export async function crearSesionCheckoutMembresiaAction({
+  restauranteId,
+  plan,
+}: {
+  restauranteId: string;
+  plan: Plan;
+}) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  if (!authUser) {
+    return { error: "No autenticado" };
+  }
+
+  const usuario = await db.query.usuarios.findFirst({
+    where: eq(usuarios.auth_id, authUser.id),
+  });
+
+  if (!usuario) {
+    return { error: "Usuario no registrado" };
+  }
+
+  const vinculo = await db.query.usuarioRestaurantes.findFirst({
+    where: and(
+      eq(usuarioRestaurantes.usuario_id, usuario.id),
+      eq(usuarioRestaurantes.restaurante_id, restauranteId),
+      eq(usuarioRestaurantes.rol, "dueno"),
+      eq(usuarioRestaurantes.activo, true)
+    ),
+  });
+
+  if (!vinculo) {
+    return { error: "Permiso denegado: solo el dueño puede contratar la membresía del restaurante." };
+  }
+
+  const rest = await db.query.restaurantes.findFirst({
+    where: eq(restaurantes.id, restauranteId),
+  });
+
+  if (!rest) {
+    return { error: "Restaurante no encontrado" };
+  }
+
+  const stripe = getStripeClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const priceId = STRIPE_PRICES[plan];
+
+  if (!priceId) {
+    return { error: `ID de precio de Stripe no configurado para el plan ${plan}.` };
+  }
+
+  try {
+    const sessionParams: any = {
+      mode: "subscription",
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        restaurante_id: rest.id,
+        plan,
+      },
+      client_reference_id: rest.id,
+      success_url: `${appUrl}/restaurante/configuracion?exito=membresia`,
+      cancel_url: `${appUrl}/restaurante/configuracion?cancelado=true`,
+    };
+
+    if (rest.stripe_customer_id) {
+      sessionParams.customer = rest.stripe_customer_id;
+    } else {
+      sessionParams.customer_email = usuario.email;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    return { url: session.url };
+  } catch (err: any) {
+    console.error("[StripeCheckoutMembresia] Error creando sesión de Checkout:", err);
+    return { error: err.message || "Error al conectar con Stripe Checkout." };
+  }
+}
 
 export async function crearPortalClienteStripeAction(restauranteId: string) {
   const rest = await db.query.restaurantes.findFirst({

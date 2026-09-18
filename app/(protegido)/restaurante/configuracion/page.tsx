@@ -27,6 +27,7 @@ import {
 import {
   crearPortalClienteStripeAction,
   obtenerFacturasStripeAction,
+  crearSesionCheckoutMembresiaAction,
 } from "@/lib/stripe-billing-actions";
 import { PLANES_DETALLE, type Plan } from "@/lib/planes";
 
@@ -139,6 +140,25 @@ export default function ConfiguracionRestaurantePage() {
     }
   }
 
+  async function handleContratarMembresia() {
+    setAbriendoPortal(true);
+    try {
+      const res = await crearSesionCheckoutMembresiaAction({
+        restauranteId,
+        plan,
+      });
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        toast(res.error || "No se pudo conectar con Stripe Checkout.", "error");
+      }
+    } catch (err: any) {
+      toast(err.message || "Error al iniciar suscripción.", "error");
+    } finally {
+      setAbriendoPortal(false);
+    }
+  }
+
   const esDuenoOGerente = rolUsuario === "dueno" || rolUsuario === "gerente";
 
   if (cargando) {
@@ -242,8 +262,20 @@ export default function ConfiguracionRestaurantePage() {
                   </p>
                 </div>
               ) : (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-[11px]">
-                  Restaurante configurado localmente sin ID de Stripe asociado.
+                <div className="pt-2 space-y-2">
+                  {esDuenoOGerente && (
+                    <Button
+                      onClick={handleContratarMembresia}
+                      loading={abriendoPortal}
+                      className="w-full justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      Adquirir Membresía Plan {PLANES_DETALLE[plan].nombre}
+                    </Button>
+                  )}
+                  <p className="text-[10px] text-slate-400 text-center">
+                    Activa tu suscripción para asegurar la continuidad de tu servicio sin interrupciones.
+                  </p>
                 </div>
               )}
             </CardContent>

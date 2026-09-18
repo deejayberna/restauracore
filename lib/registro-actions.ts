@@ -12,6 +12,7 @@ import type { Plan } from "@/lib/planes";
 import { eq } from "drizzle-orm";
 import { getStripeClient, STRIPE_PRICES } from "@/lib/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { z } from "zod";
 import * as crypto from "crypto";
 import { cookies } from "next/headers";
@@ -32,6 +33,154 @@ function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
+}
+
+/**
+ * Registro directo de autoservicio sin tarjeta (14 Días de Prueba Gratuita).
+ * Crea el usuario, restaurante y asignación con trial activo de 14 días.
+ */
+export async function registrarRestauranteDirectoAction(input: RegistroInput) {
+  const valid = RegistroSchema.safeParse(input);
+  if (!valid.success) {
+    return { error: valid.error.issues[0].message };
+  }
+
+  const { nombreRestaurante, direccion, timezone, nombreDueno, email, password, plan } = valid.data;
+  const cleanEmail = email.toLowerCase().trim();
+
+  // 1. Verificar si el usuario ya existe en nuestra BD
+  const usuarioExistente = await db.query.usuarios.findFirst({
+    where: eq(usuarios.email, cleanEmail),
+  });
+
+  if (usuarioExistente) {
+    return { error: "Ya existe una cuenta con este correo electrónico. Inicia sesión para continuar." };
+  }
+
+  // 2. Crear usuario en Supabase Auth
+  const supabaseAdmin = createSupabaseAdminClient();
+  let authUserId: string;
+
+  const authUserRes = await supabaseAdmin.auth.admin.createUser({
+    email: cleanEmail,
+    password: password,
+    email_confirm: true,
+    user_metadata: {
+      nombre: nombreDueno.trim(),
+    },
+  });
+
+  if (authUserRes.error) {
+    const listRes = await supabaseAdmin.auth.admin.listUsers();
+    const existing = listRes.data.users.find((u) => u.email === cleanEmail);
+    if (existing) {
+      authUserId = existing.id;
+      await supabaseAdmin.auth.admin.updateUserById(existing.id, { password });
+    } else {
+      return { error: `Error al registrar usuario: ${authUserRes.error.message}` };
+    }
+  } else {
+    authUserId = authUserRes.data.user.id;
+  }
+
+  // 3. 14 días exactos de prueba gratuita
+  const fechaFinTrial = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  let nuevoRestauranteId = "";
+  let nuevoUsuarioId = "";
+
+  try {
+    await db.transaction(async (tx) => {
+      // A. Crear o asegurar usuario
+      let [u] = await tx.select().from(usuarios).where(eq(usuarios.email, cleanEmail)).limit(1);
+      if (!u) {
+        [u] = await tx
+          .insert(usuarios)
+          .values({
+            auth_id: authUserId,
+            email: cleanEmail,
+            nombre: nombreDueno.trim(),
+            activo: true,
+          })
+          .returning();
+      } else {
+        [u] = await tx
+          .update(usuarios)
+          .set({ auth_id: authUserId, nombre: nombreDueno.trim() })
+          .where(eq(usuarios.id, u.id))
+          .returning();
+      }
+      nuevoUsuarioId = u.id;
+
+      // B. Crear restaurante con trial activo de 14 días sin Stripe requerido
+      const [r] = await tx
+        .insert(restaurantes)
+        .values({
+          nombre: nombreRestaurante.trim(),
+          direccion: direccion?.trim() || null,
+          timezone,
+          plan: plan as Plan,
+          stripe_customer_id: null,
+          stripe_subscription_id: null,
+          estado_suscripcion: "trial",
+          fecha_fin_trial: fechaFinTrial,
+        })
+        .returning();
+      nuevoRestauranteId = r.id;
+
+      // C. Vincular dueño
+      await tx.insert(usuarioRestaurantes).values({
+        usuario_id: u.id,
+        restaurante_id: r.id,
+        rol: "dueno",
+        activo: true,
+        invitacion_pendiente: false,
+      });
+
+      // D. Asentar en log de auditoría
+      await tx.insert(logAuditoria).values({
+        restaurante_id: r.id,
+        usuario_id: u.id,
+        accion: "REGISTRO_RESTAURANTE_DIRECTO_TRIAL",
+        valores_nuevos: {
+          plan,
+          trial_dias: 14,
+          email: cleanEmail,
+          fecha_fin_trial: fechaFinTrial.toISOString(),
+        },
+      });
+    });
+
+    // 4. Iniciar sesión automática mediante cookies del servidor
+    try {
+      const supabaseServer = await createSupabaseServerClient();
+      await supabaseServer.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password,
+      });
+
+      const cookieStore = await cookies();
+      cookieStore.set("restaurante_activo", nuevoRestauranteId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
+    } catch (authErr) {
+      console.warn("[RegistroDirecto] Advertencia al auto-iniciar sesión:", authErr);
+      // Continúa; si falla la cookie en server action, redirigirá al login con mensaje exitoso
+    }
+
+    return {
+      success: true,
+      restauranteId: nuevoRestauranteId,
+      duenoId: nuevoUsuarioId,
+      nombreRestaurante,
+      redirectUrl: "/home",
+    };
+  } catch (err: any) {
+    console.error("[RegistroDirecto] Error transaccional en PostgreSQL:", err);
+    return { error: err.message || "Error al completar el registro del restaurante." };
+  }
 }
 
 export async function iniciarRegistroStripeAction(input: RegistroInput) {

@@ -11,12 +11,14 @@ export function AppShellWrapper({
   currentBranchId,
   branches,
   notificationCounts,
+  trialBanner,
   children,
 }: {
   user: NavUser;
   currentBranchId: string;
   branches: BranchInfo[];
   notificationCounts: NotificationCounts;
+  trialBanner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -26,6 +28,7 @@ export function AppShellWrapper({
         currentBranchId={currentBranchId}
         branches={branches}
         notificationCounts={notificationCounts}
+        trialBanner={trialBanner}
       >
         {children}
       </NavigationShell>

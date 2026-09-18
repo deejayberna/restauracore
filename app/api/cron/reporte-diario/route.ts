@@ -13,7 +13,8 @@ import {
   usuarios,
 } from "@/db/schema";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { enviarNotificacionReporteDiario } from "@/lib/notificaciones";
+import { enviarNotificacionReporteDiario, enviarNotificacionRecordatorioTrial } from "@/lib/notificaciones";
+import { obtenerDestinatariosRestaurante } from "@/lib/notificaciones-destinatarios";
 import { calcularVentanasTiempo } from "@/lib/dashboard-actions";
 
 export async function GET(request: NextRequest) {
@@ -246,6 +247,26 @@ export async function GET(request: NextRequest) {
         .update(reportesDiariosEnviados)
         .set({ datos_resumen: resumenData })
         .where(eq(reportesDiariosEnviados.id, registroReporteId));
+
+      // 7. Evaluación de recordatorio de fin de prueba de 14 días (1 o 2 días restantes)
+      if (rest.estado_suscripcion === "trial" && rest.fecha_fin_trial) {
+        const diffMs = new Date(rest.fecha_fin_trial).getTime() - ahora.getTime();
+        const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diasRestantes === 1 || diasRestantes === 2) {
+          try {
+            const dest = await obtenerDestinatariosRestaurante(rest.id);
+            await enviarNotificacionRecordatorioTrial({
+              restaurante: rest.nombre,
+              diasRestantes,
+              destinatario_email: dest.emails,
+              chat_id: dest.chat_id,
+            });
+          } catch (trialErr: any) {
+            console.error(`[Cron Recordatorio Trial] Error enviando recordatorio a ${rest.nombre}:`, trialErr?.message ?? trialErr);
+          }
+        }
+      }
 
       resultados.push({
         restaurante_id: rest.id,

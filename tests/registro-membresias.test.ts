@@ -11,15 +11,25 @@ import { eq, and } from "drizzle-orm";
 import {
   tienePermisoPlan,
   evaluarAccesoMultiSucursal,
+  evaluarEstadoMembresia,
   PLANES_DETALLE,
 } from "@/lib/planes";
 import { POST as stripeWebhookPOST } from "@/app/api/webhooks/stripe/route";
 import { NextRequest } from "next/server";
-import { activarRestaurantePorSesion } from "@/lib/registro-actions";
+import { activarRestaurantePorSesion, registrarRestauranteDirectoAction } from "@/lib/registro-actions";
 
 // Mock de Stripe Client y Supabase Admin
 const mockCheckoutSessionsRetrieve = vi.fn();
 const mockWebhooksConstructEvent = vi.fn();
+
+vi.mock("@/lib/supabase-server", () => ({
+  createSupabaseServerClient: vi.fn(async () => ({
+    auth: {
+      signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+      getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+    },
+  })),
+}));
 
 vi.mock("@/lib/stripe", () => ({
   getStripeClient: vi.fn(() => ({
@@ -362,6 +372,181 @@ describe("Fase 11 — Membresías, Registro Self-Service y Webhooks Stripe", () 
       await db
         .delete(stripeEventosProcesados)
         .where(eq(stripeEventosProcesados.id, eventoFalloId));
+    });
+  });
+
+  describe("Nueva Arquitectura Onboarding: 14 Días Gratis Sin Tarjeta, Recordatorio y Paywall", () => {
+    let directoRestauranteId: string | null = null;
+    let directoUsuarioId: string | null = null;
+
+    afterAll(async () => {
+      if (directoRestauranteId) {
+        await db
+          .delete(usuarioRestaurantes)
+          .where(eq(usuarioRestaurantes.restaurante_id, directoRestauranteId))
+          .catch(() => {});
+        await db
+          .delete(restaurantes)
+          .where(eq(restaurantes.id, directoRestauranteId))
+          .catch(() => {});
+      }
+      if (directoUsuarioId) {
+        await db
+          .delete(usuarios)
+          .where(eq(usuarios.id, directoUsuarioId))
+          .catch(() => {});
+      }
+    });
+
+    it("evaluarEstadoMembresia: calcula correctamente vigencia, recordatorio (días 1 y 2) y bloqueo tras 14 días", () => {
+      const ahora = new Date();
+
+      // 1. Trial activo con 10 días restantes -> No bloqueado, sin recordatorio
+      const trial10d = evaluarEstadoMembresia({
+        estado_suscripcion: "trial",
+        fecha_fin_trial: new Date(ahora.getTime() + 10 * 24 * 60 * 60 * 1000),
+      });
+      expect(trial10d.bloqueado).toBe(false);
+      expect(trial10d.debeMostrarRecordatorio).toBe(false);
+      expect(trial10d.diasRestantesTrial).toBe(10);
+
+      // 2. Trial activo con 2 días restantes -> Recordatorio activo
+      const trial2d = evaluarEstadoMembresia({
+        estado_suscripcion: "trial",
+        fecha_fin_trial: new Date(ahora.getTime() + 2 * 24 * 60 * 60 * 1000 - 1000),
+      });
+      expect(trial2d.bloqueado).toBe(false);
+      expect(trial2d.debeMostrarRecordatorio).toBe(true);
+      expect(trial2d.diasRestantesTrial).toBe(2);
+
+      // 3. Trial activo con 1 día restante -> Recordatorio activo
+      const trial1d = evaluarEstadoMembresia({
+        estado_suscripcion: "trial",
+        fecha_fin_trial: new Date(ahora.getTime() + 1 * 24 * 60 * 60 * 1000 - 1000),
+      });
+      expect(trial1d.bloqueado).toBe(false);
+      expect(trial1d.debeMostrarRecordatorio).toBe(true);
+      expect(trial1d.diasRestantesTrial).toBe(1);
+
+      // 4. Trial expirado (ayer) -> Bloqueado (Paywall)
+      const trialVencido = evaluarEstadoMembresia({
+        estado_suscripcion: "trial",
+        fecha_fin_trial: new Date(ahora.getTime() - 1 * 24 * 60 * 60 * 1000),
+      });
+      expect(trialVencido.bloqueado).toBe(true);
+      expect(trialVencido.motivoBloqueo).toBe("trial_vencido");
+
+      // 5. Membresía activa -> Siempre permitida
+      const activa = evaluarEstadoMembresia({
+        estado_suscripcion: "activa",
+        fecha_fin_trial: null,
+      });
+      expect(activa.bloqueado).toBe(false);
+      expect(activa.esTrial).toBe(false);
+
+      // 6. Membresía cancelada -> Bloqueada
+      const cancelada = evaluarEstadoMembresia({
+        estado_suscripcion: "cancelada",
+        fecha_fin_trial: null,
+      });
+      expect(cancelada.bloqueado).toBe(true);
+      expect(cancelada.motivoBloqueo).toBe("cancelada");
+    });
+
+    it("registrarRestauranteDirectoAction: crea restaurante en modo trial (14 días) sin requerir tarjeta", async () => {
+      const emailTest = `direct_trial_${Date.now()}@restauratest.com`;
+      const input = {
+        nombreRestaurante: "Restaurante Prueba Directa",
+        direccion: "Calle Libre 123",
+        timezone: "America/Mexico_City",
+        nombreDueno: "Dueño Directo",
+        email: emailTest,
+        password: "PasswordSegura123!",
+        plan: "pro" as const,
+      };
+
+      const res = await registrarRestauranteDirectoAction(input);
+      expect(res.success).toBe(true);
+      expect(res.restauranteId).toBeDefined();
+      expect(res.redirectUrl).toBe("/home");
+
+      directoRestauranteId = res.restauranteId!;
+      directoUsuarioId = res.duenoId!;
+
+      // Verificar en base de datos
+      const rest = await db.query.restaurantes.findFirst({
+        where: eq(restaurantes.id, directoRestauranteId),
+      });
+      expect(rest).toBeDefined();
+      expect(rest?.plan).toBe("pro");
+      expect(rest?.estado_suscripcion).toBe("trial");
+      expect(rest?.stripe_customer_id).toBeNull();
+      expect(rest?.stripe_subscription_id).toBeNull();
+      expect(rest?.fecha_fin_trial).toBeDefined();
+
+      // Verificar que la fecha de fin de trial es ~14 días en el futuro
+      const diffDias = (new Date(rest!.fecha_fin_trial!).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      expect(diffDias).toBeGreaterThan(13.9);
+      expect(diffDias).toBeLessThanOrEqual(14.05);
+
+      // Verificar que evaluarEstadoMembresia lo considera trial activo
+      const evaluacion = evaluarEstadoMembresia({
+        estado_suscripcion: rest?.estado_suscripcion,
+        fecha_fin_trial: rest?.fecha_fin_trial,
+      });
+      expect(evaluacion.bloqueado).toBe(false);
+      expect(evaluacion.esTrial).toBe(true);
+    });
+
+    it("Webhook checkout.session.completed para restaurante existente activa suscripción de inmediato", async () => {
+      expect(directoRestauranteId).toBeDefined();
+
+      const eventoCheckoutId = `evt_existing_sub_${Date.now()}`;
+      const customerId = `cus_direct_${Date.now()}`;
+      const subId = `sub_direct_${Date.now()}`;
+
+      mockWebhooksConstructEvent.mockReturnValueOnce({
+        id: eventoCheckoutId,
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: `cs_existing_${Date.now()}`,
+            client_reference_id: directoRestauranteId,
+            customer: customerId,
+            subscription: subId,
+            metadata: {
+              restaurante_id: directoRestauranteId,
+              plan: "enterprise",
+            },
+          },
+        },
+      });
+
+      const req = new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: {
+          "stripe-signature": "t=123,v1=valid_sig",
+        },
+        body: JSON.stringify({ id: eventoCheckoutId }),
+      });
+
+      const res = await stripeWebhookPOST(req);
+      expect(res.status).toBe(200);
+
+      // Verificar que el restaurante pasó a 'activa' y actualizó su plan
+      const rest = await db.query.restaurantes.findFirst({
+        where: eq(restaurantes.id, directoRestauranteId!),
+      });
+      expect(rest?.estado_suscripcion).toBe("activa");
+      expect(rest?.plan).toBe("enterprise");
+      expect(rest?.stripe_customer_id).toBe(customerId);
+      expect(rest?.stripe_subscription_id).toBe(subId);
+      expect(rest?.fecha_fin_trial).toBeNull();
+
+      // Limpiar evento
+      await db
+        .delete(stripeEventosProcesados)
+        .where(eq(stripeEventosProcesados.id, eventoCheckoutId));
     });
   });
 });

@@ -104,6 +104,96 @@ export function evaluarAccesoMultiSucursal(
   };
 }
 
+export interface InfoEstadoMembresia {
+  bloqueado: boolean;
+  motivoBloqueo: "trial_vencido" | "pago_fallido" | "cancelada" | null;
+  esTrial: boolean;
+  diasRestantesTrial: number | null;
+  debeMostrarRecordatorio: boolean;
+  fechaFinTrial: Date | null;
+}
+
+/**
+ * Evalúa si el restaurante puede continuar utilizando el servicio operativo
+ * o si se debe activar el paywall/bloqueo por fin de trial o pago fallido.
+ */
+export function evaluarEstadoMembresia(restaurante: {
+  estado_suscripcion?: string | null;
+  fecha_fin_trial?: Date | string | null;
+}): InfoEstadoMembresia {
+  const estado = restaurante.estado_suscripcion || "trial";
+  const fechaFin = restaurante.fecha_fin_trial ? new Date(restaurante.fecha_fin_trial) : null;
+  const ahora = new Date();
+
+  if (estado === "activa") {
+    return {
+      bloqueado: false,
+      motivoBloqueo: null,
+      esTrial: false,
+      diasRestantesTrial: null,
+      debeMostrarRecordatorio: false,
+      fechaFinTrial: null,
+    };
+  }
+
+  if (estado === "pago_fallido") {
+    return {
+      bloqueado: true,
+      motivoBloqueo: "pago_fallido",
+      esTrial: false,
+      diasRestantesTrial: null,
+      debeMostrarRecordatorio: false,
+      fechaFinTrial: null,
+    };
+  }
+
+  if (estado === "cancelada") {
+    return {
+      bloqueado: true,
+      motivoBloqueo: "cancelada",
+      esTrial: false,
+      diasRestantesTrial: null,
+      debeMostrarRecordatorio: false,
+      fechaFinTrial: null,
+    };
+  }
+
+  // Estado 'trial'
+  if (fechaFin) {
+    const diffMs = fechaFin.getTime() - ahora.getTime();
+    const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMs <= 0) {
+      return {
+        bloqueado: true,
+        motivoBloqueo: "trial_vencido",
+        esTrial: true,
+        diasRestantesTrial: 0,
+        debeMostrarRecordatorio: false,
+        fechaFinTrial: fechaFin,
+      };
+    }
+
+    return {
+      bloqueado: false,
+      motivoBloqueo: null,
+      esTrial: true,
+      diasRestantesTrial: Math.max(1, diasRestantes),
+      debeMostrarRecordatorio: diasRestantes <= 2,
+      fechaFinTrial: fechaFin,
+    };
+  }
+
+  return {
+    bloqueado: false,
+    motivoBloqueo: null,
+    esTrial: true,
+    diasRestantesTrial: null,
+    debeMostrarRecordatorio: false,
+    fechaFinTrial: null,
+  };
+}
+
 export interface InfoPlan {
   id: Plan;
   nombre: string;

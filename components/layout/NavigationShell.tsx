@@ -48,12 +48,14 @@ export function NavigationShell({
   currentBranchId,
   branches,
   notificationCounts,
+  trialBanner,
   children,
 }: {
   user: NavUser;
   currentBranchId: string;
   branches: BranchInfo[];
   notificationCounts: NotificationCounts;
+  trialBanner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -287,6 +289,7 @@ export function NavigationShell({
 
       {/* ─── CONTENIDO PRINCIPAL ───────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 overflow-y-auto pb-24 md:pb-8">
+        {trialBanner}
         <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
 

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { stripeEventosProcesados, restaurantes, logAuditoria, usuarioRestaurantes } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { activarRestaurantePorSesion } from "@/lib/registro-actions";
+import type { Plan } from "@/lib/planes";
 import Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -43,7 +44,53 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        await activarRestaurantePorSesion(session.id);
+        const targetRestId = session.metadata?.restaurante_id || session.client_reference_id;
+
+        let restExistente = null;
+        if (targetRestId) {
+          restExistente = await db.query.restaurantes.findFirst({
+            where: eq(restaurantes.id, targetRestId),
+          });
+        }
+
+        if (restExistente) {
+          const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+          const subId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+          const planContratado = (session.metadata?.plan as Plan) || restExistente.plan;
+
+          await db
+            .update(restaurantes)
+            .set({
+              plan: planContratado,
+              stripe_customer_id: customerId || restExistente.stripe_customer_id,
+              stripe_subscription_id: subId || restExistente.stripe_subscription_id,
+              estado_suscripcion: "activa",
+              fecha_fin_trial: null,
+            })
+            .where(eq(restaurantes.id, restExistente.id));
+
+          // Log de auditoría
+          const vinculo = await db.query.usuarioRestaurantes.findFirst({
+            where: and(
+              eq(usuarioRestaurantes.restaurante_id, restExistente.id),
+              eq(usuarioRestaurantes.rol, "dueno")
+            ),
+          });
+
+          await db.insert(logAuditoria).values({
+            restaurante_id: restExistente.id,
+            usuario_id: vinculo?.usuario_id || null,
+            accion: "MEMBRESIA_ACTIVADA_STRIPE",
+            valores_nuevos: {
+              plan: planContratado,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subId,
+              session_id: session.id,
+            },
+          });
+        } else {
+          await activarRestaurantePorSesion(session.id);
+        }
         break;
       }
 

@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { obtenerResumenNotificacionesAction } from "@/lib/notificaciones-queries";
+import { evaluarEstadoMembresia, type Plan } from "@/lib/planes";
 
 export async function getProtectedLayoutData() {
   const supabase = await createSupabaseServerClient();
@@ -27,12 +28,15 @@ export async function getProtectedLayoutData() {
   const cookieStore = await cookies();
   const restaurante_activo_id = cookieStore.get("restaurante_activo")?.value;
 
-  // Obtener todas las sucursales asignadas activas del usuario
+  // Obtener todas las sucursales asignadas activas del usuario con estado de membresía
   const vinculos = await db
     .select({
       restaurante_id: usuarioRestaurantes.restaurante_id,
       rol: usuarioRestaurantes.rol,
       nombre: restaurantes.nombre,
+      plan: restaurantes.plan,
+      estado_suscripcion: restaurantes.estado_suscripcion,
+      fecha_fin_trial: restaurantes.fecha_fin_trial,
     })
     .from(usuarioRestaurantes)
     .innerJoin(restaurantes, eq(restaurantes.id, usuarioRestaurantes.restaurante_id))
@@ -82,6 +86,11 @@ export async function getProtectedLayoutData() {
     // Ignorar para roles que no tienen acceso a notificaciones
   }
 
+  const membresia = evaluarEstadoMembresia({
+    estado_suscripcion: vinculoActivo.estado_suscripcion,
+    fecha_fin_trial: vinculoActivo.fecha_fin_trial,
+  });
+
   return {
     user: {
       id: usuario.id,
@@ -92,6 +101,19 @@ export async function getProtectedLayoutData() {
     currentBranchId: vinculoActivo.restaurante_id,
     branches: vinculos,
     notificationCounts,
+    membresia: {
+      bloqueado: membresia.bloqueado,
+      motivoBloqueo: membresia.motivoBloqueo,
+      esTrial: membresia.esTrial,
+      diasRestantesTrial: membresia.diasRestantesTrial,
+      debeMostrarRecordatorio: membresia.debeMostrarRecordatorio,
+      fechaFinTrial: membresia.fechaFinTrial ? membresia.fechaFinTrial.toISOString() : null,
+    },
+    restauranteActivo: {
+      id: vinculoActivo.restaurante_id,
+      nombre: vinculoActivo.nombre,
+      plan: vinculoActivo.plan as Plan,
+    },
   };
 }
 

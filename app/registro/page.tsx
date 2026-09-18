@@ -12,7 +12,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { PLANES_DETALLE, type Plan } from "@/lib/planes";
-import { iniciarRegistroStripeAction, type RegistroInput } from "@/lib/registro-actions";
+import { registrarRestauranteDirectoAction, type RegistroInput } from "@/lib/registro-actions";
 
 export default function RegistroPage({
   searchParams,
@@ -49,11 +49,11 @@ export default function RegistroPage({
     };
 
     startTransition(async () => {
-      const res = await iniciarRegistroStripeAction(input);
+      const res = await registrarRestauranteDirectoAction(input);
       if (res.error) {
         setError(res.error);
-      } else if (res.checkoutUrl) {
-        window.location.href = res.checkoutUrl;
+      } else if (res.redirectUrl) {
+        window.location.href = res.redirectUrl;
       }
     });
   };
@@ -86,13 +86,13 @@ export default function RegistroPage({
         <div className="text-center max-w-xl mx-auto mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 mb-3">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>14 Días de Prueba Gratuita Incluidos</span>
+            <span>14 Días de Prueba Gratuita · Sin Tarjeta Bancaria</span>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900">
             Registra tu Restaurante
           </h1>
           <p className="mt-2 text-sm text-neutral-600">
-            Crea tu cuenta de dueño y configura tu sucursal. No se realizará ningún cargo hoy.
+            Crea tu cuenta de dueño y comienza a operar hoy mismo. Sin ingresar tarjeta de crédito ni compromisos.
           </p>
         </div>
 
@@ -270,9 +270,7 @@ export default function RegistroPage({
             </div>
 
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Al hacer clic en &quot;Continuar a Stripe&quot;, ingresarás tu tarjeta de crédito o débito
-              mediante la pasarela encriptada de Stripe. No se realizará ningún cargo hasta que
-              terminen tus 14 días de prueba. Puedes cancelar en cualquier momento.
+              Sin tarjeta requerida. Disfruta de 14 días con acceso completo a todas las funcionalidades del Plan {planSeleccionado.nombre}. Al finalizar el plazo, podrás decidir si deseas contratar tu membresía para continuar operando.
             </p>
 
             <button
@@ -281,11 +279,11 @@ export default function RegistroPage({
               className="w-full py-4 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               {isPending ? (
-                <span>Conectando con Stripe Checkout...</span>
+                <span>Creando cuenta y activando prueba...</span>
               ) : (
                 <>
-                  <Lock className="w-4 h-4" />
-                  <span>Continuar a Stripe (Prueba 14 Días)</span>
+                  <Sparkles className="w-4 h-4 text-orange-200" />
+                  <span>Comenzar Mis 14 Días Gratis</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
