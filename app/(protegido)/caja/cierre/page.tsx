@@ -51,11 +51,11 @@ export default async function CierreCajaPage({ searchParams }: PageProps) {
     )
     .limit(1);
 
-  if (!vinculo[0] || !["mesero", "gerente", "dueno"].includes(vinculo[0].rol)) {
-    redirect("/dashboard?error=sin-permiso");
+  if (!vinculo[0] || !["cajero", "mesero", "gerente", "dueno"].includes(vinculo[0].rol)) {
+    redirect("/home?error=sin-permiso");
   }
 
-  const rol = vinculo[0].rol as "mesero" | "gerente" | "dueno";
+  const rol = vinculo[0].rol as "cajero" | "mesero" | "gerente" | "dueno";
   const resolvedParams = await searchParams;
 
   // Identificador de turno por defecto: turno del día actual

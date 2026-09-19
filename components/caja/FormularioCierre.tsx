@@ -9,7 +9,7 @@ import {
 } from "@/lib/caja-actions";
 
 interface FormularioCierreProps {
-  rol: "mesero" | "gerente" | "dueno";
+  rol: "cajero" | "mesero" | "gerente" | "dueno";
   usuarioNombre: string;
   usuarioId: string;
   turnoInfo: EstadoTurnoInfo;

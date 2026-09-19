@@ -16,6 +16,7 @@ const RUTAS_PROTEGIDAS: Record<string, string[]> = {
   "/home": ["mesero", "cajero", "chef", "gerente", "dueno"],
   "/perfil": ["mesero", "cajero", "chef", "gerente", "dueno"],
   "/mesas": ["mesero", "gerente", "dueno"],
+  "/restaurante": ["dueno"],
 };
 
 export async function middleware(request: NextRequest) {
@@ -119,6 +120,7 @@ export const config = {
     "/home/:path*",
     "/perfil/:path*",
     "/mesas/:path*",
+    "/restaurante/:path*",
   ],
 };
 
