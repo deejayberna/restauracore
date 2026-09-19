@@ -60,11 +60,11 @@ if (
   }
 }
 
-// Limitadores preconfigurados (Upstash o Fallback en memoria)
 export const RATE_LIMIT_CONFIGS = {
   menu: { limit: 60, window: "60 s", windowMs: 60 * 1000 },
   pedido: { limit: 10, window: "60 s", windowMs: 60 * 1000 },
   login: { limit: 5, window: "60 s", windowMs: 60 * 1000 },
+  registro: { limit: 3, window: "3600 s", windowMs: 60 * 60 * 1000 }, // 3 registros por IP por hora
 } as const;
 
 export async function checkRateLimit(
@@ -107,5 +107,9 @@ export async function checkRateLimitPedido(ipAndToken: string): Promise<RateLimi
 
 export async function checkRateLimitLogin(ip: string): Promise<RateLimitResult> {
   return checkRateLimit("login", ip);
+}
+
+export async function checkRateLimitRegistro(ip: string): Promise<RateLimitResult> {
+  return checkRateLimit("registro", ip);
 }
 

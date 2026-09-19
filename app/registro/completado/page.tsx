@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, UtensilsCrossed, ArrowRight } from "lucide-react";
 import { consultarEstadoActivacionAction } from "@/lib/registro-actions";
 
+/**
+ * [LEGACY / CÓDIGO PRESERVADO - FASE 11]
+ * Esta página servía como pantalla de espera y confirmación post-checkout para el
+ * flujo Webhook-First original donde se cobraba/ingresaba tarjeta desde el registro.
+ * Tras la transición a trial directo de 14 días sin tarjeta, esta ruta quedó inactiva.
+ * Se conserva por contingencia en caso de reactivar el registro con tarjeta previa.
+ * TODO: Evaluar reactivación o eliminación definitiva en fases futuras.
+ */
 export default function RegistroCompletadoPage({
   searchParams,
 }: {

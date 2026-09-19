@@ -15,7 +15,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { z } from "zod";
 import * as crypto from "crypto";
-import { cookies } from "next/headers";
+import { checkRateLimitRegistro } from "@/lib/rate-limiter";
+import { validarTurnstileToken } from "@/lib/turnstile";
+import { cookies, headers } from "next/headers";
 
 const RegistroSchema = z.object({
   nombreRestaurante: z.string().min(2, "El nombre del restaurante debe tener al menos 2 caracteres"),
@@ -25,6 +27,7 @@ const RegistroSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
   plan: z.enum(["basico", "pro", "enterprise"] as const),
+  turnstileToken: z.string().optional(),
 });
 
 export type RegistroInput = z.infer<typeof RegistroSchema>;
@@ -38,14 +41,38 @@ function hashPassword(password: string): string {
 /**
  * Registro directo de autoservicio sin tarjeta (14 Días de Prueba Gratuita).
  * Crea el usuario, restaurante y asignación con trial activo de 14 días.
+ * Aplica Rate Limiting, Captcha Turnstile y exige confirmación de correo electrónico.
  */
 export async function registrarRestauranteDirectoAction(input: RegistroInput) {
+  // 0. Rate limiting perimetral por IP (máximo 3 registros por hora)
+  let ip = "127.0.0.1";
+  try {
+    const h = await headers();
+    ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "127.0.0.1";
+  } catch {
+    // Contexto sin headers de request (ej. tests unitarios)
+  }
+
+  const rateCheck = await checkRateLimitRegistro(ip);
+  if (!rateCheck.success) {
+    return {
+      error: "Demasiados intentos de registro desde esta conexión. Por favor intenta más tarde (máximo 3 registros por hora).",
+    };
+  }
+
   const valid = RegistroSchema.safeParse(input);
   if (!valid.success) {
     return { error: valid.error.issues[0].message };
   }
 
-  const { nombreRestaurante, direccion, timezone, nombreDueno, email, password, plan } = valid.data;
+  const { nombreRestaurante, direccion, timezone, nombreDueno, email, password, plan, turnstileToken } = valid.data;
+
+  // 0.1 Validación de Cloudflare Turnstile
+  const turnstileCheck = await validarTurnstileToken(turnstileToken, ip);
+  if (!turnstileCheck.success) {
+    return { error: turnstileCheck.error || "Fallo en la verificación de seguridad (Captcha)." };
+  }
+
   const cleanEmail = email.toLowerCase().trim();
 
   // 1. Verificar si el usuario ya existe en nuestra BD
@@ -57,14 +84,14 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
     return { error: "Ya existe una cuenta con este correo electrónico. Inicia sesión para continuar." };
   }
 
-  // 2. Crear usuario en Supabase Auth
+  // 2. Crear usuario en Supabase Auth con confirmación requerida (email_confirm: false)
   const supabaseAdmin = createSupabaseAdminClient();
   let authUserId: string;
 
   const authUserRes = await supabaseAdmin.auth.admin.createUser({
     email: cleanEmail,
     password: password,
-    email_confirm: true,
+    email_confirm: false, // <-- Exige verificación obligatoria para nuevos registros
     user_metadata: {
       nombre: nombreDueno.trim(),
     },
@@ -150,32 +177,29 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
       });
     });
 
-    // 4. Iniciar sesión automática mediante cookies del servidor
+    // 4. Enviar correo de confirmación de cuenta vía Supabase Auth
     try {
       const supabaseServer = await createSupabaseServerClient();
-      await supabaseServer.auth.signInWithPassword({
+      await supabaseServer.auth.resend({
+        type: "signup",
         email: cleanEmail,
-        password: password,
-      });
-
-      const cookieStore = await cookies();
-      cookieStore.set("restaurante_activo", nuevoRestauranteId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?confirmado=true`,
+        },
       });
     } catch (authErr) {
-      console.warn("[RegistroDirecto] Advertencia al auto-iniciar sesión:", authErr);
-      // Continúa; si falla la cookie en server action, redirigirá al login con mensaje exitoso
+      console.warn("[RegistroDirecto] Advertencia al solicitar envío de correo de confirmación:", authErr);
     }
 
     return {
       success: true,
+      requiereConfirmacion: true,
       restauranteId: nuevoRestauranteId,
       duenoId: nuevoUsuarioId,
       nombreRestaurante,
-      redirectUrl: "/home",
+      email: cleanEmail,
+      mensaje:
+        "¡Registro completado! Hemos enviado un correo de confirmación a tu cuenta. Revisa tu bandeja de entrada y confirma tu correo para activar tu acceso.",
     };
   } catch (err: any) {
     console.error("[RegistroDirecto] Error transaccional en PostgreSQL:", err);
@@ -183,6 +207,13 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
   }
 }
 
+/**
+ * [LEGACY / CÓDIGO PRESERVADO - FASE 11]
+ * Flujo original Webhook-First con tarjeta bancaria obligatoria previa al registro.
+ * Actualmente sin uso activo tras la adopción del modelo trial directo de 14 días sin tarjeta.
+ * Se conserva intacto para permitir reactivación futura sin pérdida de código histórico.
+ * TODO: Evaluar reactivación o desmantelamiento definitivo en fases futuras.
+ */
 export async function iniciarRegistroStripeAction(input: RegistroInput) {
   const valid = RegistroSchema.safeParse(input);
   if (!valid.success) {
@@ -268,8 +299,10 @@ export async function iniciarRegistroStripeAction(input: RegistroInput) {
 }
 
 /**
- * Función atómica de activación — invocada por el Webhook de Stripe o
- * por la página de completado en caso de fallback de contingencia.
+ * [LEGACY / CÓDIGO PRESERVADO - FASE 11]
+ * Función atómica de activación del flujo original con tarjeta previa.
+ * Se mantiene por contingencia y compatibilidad con webhooks históricos.
+ * TODO: Evaluar eliminación definitiva una vez consolidado el autoservicio.
  */
 export async function activarRestaurantePorSesion(sessionId: string) {
   const stripe = getStripeClient();

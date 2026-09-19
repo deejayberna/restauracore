@@ -91,6 +91,9 @@ export async function POST(req: NextRequest) {
             });
           }
         } else {
+          // [LEGACY / CÓDIGO PRESERVADO - FASE 11]
+          // Rama de contingencia para sesiones originadas por el flujo anterior con tarjeta previa.
+          // TODO: Evaluar eliminación una vez verificado que no existan sesiones pendientes históricas.
           await activarRestaurantePorSesion(session.id);
         }
         break;

@@ -10,9 +10,11 @@ import {
   AlertCircle,
   Sparkles,
   CheckCircle2,
+  Mail,
 } from "lucide-react";
 import { PLANES_DETALLE, type Plan } from "@/lib/planes";
 import { registrarRestauranteDirectoAction, type RegistroInput } from "@/lib/registro-actions";
+import { Turnstile } from "@/components/ui/Turnstile";
 
 export default function RegistroPage({
   searchParams,
@@ -30,7 +32,13 @@ export default function RegistroPage({
   const [nombreDueno, setNombreDueno] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [confirmacionPendiente, setConfirmacionPendiente] = useState<{
+    email: string;
+    nombreRestaurante: string;
+    mensaje: string;
+  } | null>(null);
 
   const [isPending, startTransition] = useTransition();
 
@@ -46,14 +54,21 @@ export default function RegistroPage({
       email,
       password,
       plan,
+      turnstileToken,
     };
 
     startTransition(async () => {
       const res = await registrarRestauranteDirectoAction(input);
       if (res.error) {
         setError(res.error);
-      } else if (res.redirectUrl) {
-        window.location.href = res.redirectUrl;
+      } else if (res.requiereConfirmacion) {
+        setConfirmacionPendiente({
+          email: res.email || email,
+          nombreRestaurante: res.nombreRestaurante || nombreRestaurante,
+          mensaje: res.mensaje || "Revisa tu correo para activar tu cuenta.",
+        });
+      } else {
+        window.location.href = "/login";
       }
     });
   };
@@ -83,7 +98,44 @@ export default function RegistroPage({
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-10">
-        <div className="text-center max-w-xl mx-auto mb-8">
+        {confirmacionPendiente ? (
+          <div className="max-w-md mx-auto bg-white border border-neutral-200 rounded-3xl p-8 shadow-xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto border border-emerald-200 shadow-xs">
+              <Mail className="w-8 h-8 animate-bounce" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-neutral-900">
+                ¡Revisa tu bandeja de entrada!
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Para el restaurante <strong>{confirmacionPendiente.nombreRestaurante}</strong>
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-700 leading-relaxed text-left space-y-2">
+              <p>
+                Hemos enviado un correo de confirmación a:
+              </p>
+              <p className="font-mono font-bold text-orange-600 bg-white p-2 rounded-lg border border-neutral-200 break-all text-center">
+                {confirmacionPendiente.email}
+              </p>
+              <p className="text-[11px] text-neutral-500">
+                Por favor haz clic en el enlace dentro del correo para activar tu cuenta antes de iniciar sesión. Si no lo encuentras, revisa tu carpeta de spam.
+              </p>
+            </div>
+
+            <Link
+              href="/login"
+              className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+            >
+              <span>Ir a Iniciar Sesión</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="text-center max-w-xl mx-auto mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 mb-3">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>14 Días de Prueba Gratuita · Sin Tarjeta Bancaria</span>
@@ -273,13 +325,17 @@ export default function RegistroPage({
               Sin tarjeta requerida. Disfruta de 14 días con acceso completo a todas las funcionalidades del Plan {planSeleccionado.nombre}. Al finalizar el plazo, podrás decidir si deseas contratar tu membresía para continuar operando.
             </p>
 
+            <div className="py-1">
+              <Turnstile onVerify={(token) => setTurnstileToken(token)} />
+            </div>
+
             <button
               type="submit"
               disabled={isPending}
               className="w-full py-4 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               {isPending ? (
-                <span>Creando cuenta y activando prueba...</span>
+                <span>Creando cuenta y enviando correo...</span>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-orange-200" />
@@ -290,6 +346,8 @@ export default function RegistroPage({
             </button>
           </div>
         </form>
+        </>
+        )}
       </main>
 
       <footer className="border-t border-neutral-200 bg-white py-6 text-center text-xs text-neutral-400">

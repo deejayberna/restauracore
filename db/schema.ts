@@ -378,6 +378,27 @@ export const reportesDiariosEnviados = pgTable(
   ]
 );
 
+// Registro de recordatorios de trial enviados (Idempotencia y prevención de duplicados)
+// UNIQUE(restaurante_id, dias_restantes) previene enviar más de una vez el aviso de 2 días o de 1 día
+export const recordatoriosTrialEnviados = pgTable(
+  "recordatorios_trial_enviados",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    restaurante_id: uuid("restaurante_id")
+      .notNull()
+      .references(() => restaurantes.id),
+    dias_restantes: integer("dias_restantes").notNull(), // 2 o 1
+    fecha: text("fecha").notNull(), // Formato "YYYY-MM-DD" local del restaurante
+    enviado_en: timestamp("enviado_en").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("recordatorios_trial_restaurante_dias_unique").on(
+      table.restaurante_id,
+      table.dias_restantes
+    ),
+  ]
+);
+
 export const asignacionesMesa = pgTable("asignaciones_mesa", {
   id: uuid("id").primaryKey().defaultRandom(),
   restaurante_id: uuid("restaurante_id")
@@ -435,6 +456,10 @@ export const pagos = pgTable("pagos", {
   creado_en: timestamp("creado_en").notNull().defaultNow(),
 });
 
+// [LEGACY / CÓDIGO PRESERVADO - FASE 11]
+// Tabla de registros pendientes del flujo original con tarjeta obligatoria inicial.
+// Actualmente sin uso activo tras la adopción del modelo trial directo sin tarjeta.
+// Se conserva intacta en el esquema de PostgreSQL para contingencia o reactivación futura.
 export const registrosPendientes = pgTable("registros_pendientes", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
@@ -473,6 +498,7 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   alertasAnomalias: many(alertasAnomalias),
   turnos: many(turnos),
   reportesDiariosEnviados: many(reportesDiariosEnviados),
+  recordatoriosTrialEnviados: many(recordatoriosTrialEnviados),
 }));
 
 export const turnosRelations = relations(turnos, ({ one }) => ({
@@ -643,6 +669,9 @@ export type NuevoTurno = InferInsertModel<typeof turnos>;
 
 export type ReporteDiarioEnviado = InferSelectModel<typeof reportesDiariosEnviados>;
 export type NuevoReporteDiarioEnviado = InferInsertModel<typeof reportesDiariosEnviados>;
+
+export type RecordatorioTrialEnviado = InferSelectModel<typeof recordatoriosTrialEnviados>;
+export type NuevoRecordatorioTrialEnviado = InferInsertModel<typeof recordatoriosTrialEnviados>;
 
 export type AsignacionMesa = InferSelectModel<typeof asignacionesMesa>;
 export type NuevaAsignacionMesa = InferInsertModel<typeof asignacionesMesa>;

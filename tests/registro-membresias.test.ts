@@ -468,7 +468,7 @@ describe("Fase 11 — Membresías, Registro Self-Service y Webhooks Stripe", () 
       const res = await registrarRestauranteDirectoAction(input);
       expect(res.success).toBe(true);
       expect(res.restauranteId).toBeDefined();
-      expect(res.redirectUrl).toBe("/home");
+      expect(res.requiereConfirmacion).toBe(true);
 
       directoRestauranteId = res.restauranteId!;
       directoUsuarioId = res.duenoId!;

@@ -51,10 +51,21 @@ Solo marca la casilla **Production**.
 
 ---
 
-## 5. Variables Opcionales (Solo si ya las configuraste)
+## 5. Cloudflare Turnstile (Captcha Anti-Abuso en /registro)
+> *Genera tu Site Key y Secret Key gratis en el dashboard de Cloudflare -> Turnstile.*
+
+| Variable | Qué poner |
+| :--- | :--- |
+| **`NEXT_PUBLIC_TURNSTILE_SITE_KEY`** | Tu Site Key de Cloudflare Turnstile (visible al cliente en el widget) |
+| **`TURNSTILE_SECRET_KEY`** | Tu Secret Key de Cloudflare Turnstile (usada en servidor para validar token) |
+
+---
+
+## 6. Variables Opcionales (Solo si ya las configuraste)
 
 Si aún no las estás usando, **no necesitas agregarlas ahora**:
 
 * **Resend (Correos):** `RESEND_API_KEY` y `RESEND_FROM_EMAIL`. (Si no están, el sistema no enviará emails y usará Telegram).
 * **Upstash (Redis):** `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN`. (Si no están, el sistema usa protección en memoria automáticamente).
 * **Webhook de Stripe:** `STRIPE_WEBHOOK_SECRET`. (Se agrega **después** del primer despliegue cuando ya sepas la URL pública de Vercel y registres el endpoint en Stripe).
+
