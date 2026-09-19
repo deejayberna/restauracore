@@ -17,6 +17,7 @@ import {
   Coins,
   XCircle,
   Clock,
+  BookOpen,
 } from "lucide-react";
 import { db } from "@/db";
 import {
@@ -453,6 +454,12 @@ export default async function HomePage() {
                   <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-sky-500 dark:hover:border-sky-500 transition-colors flex flex-col items-center text-center gap-2">
                     <Coins className="w-5 h-5 text-emerald-600" />
                     <span className="text-xs font-semibold">Propinas</span>
+                  </div>
+                </Link>
+                <Link href="/menu/administrar">
+                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-500 dark:hover:border-orange-500 transition-colors flex flex-col items-center text-center gap-2">
+                    <BookOpen className="w-5 h-5 text-orange-600" />
+                    <span className="text-xs font-semibold">Menú & Recetas</span>
                   </div>
                 </Link>
               </div>

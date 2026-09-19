@@ -17,6 +17,7 @@ const RUTAS_PROTEGIDAS: Record<string, string[]> = {
   "/perfil": ["mesero", "cajero", "chef", "gerente", "dueno"],
   "/mesas": ["mesero", "gerente", "dueno"],
   "/restaurante": ["dueno"],
+  "/menu/administrar": ["gerente", "dueno"],
 };
 
 export async function middleware(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // 1. Rate Limiting perimetral para menú público (/menu/[qrToken])
-  if (pathname.startsWith("/menu")) {
+  if (pathname.startsWith("/menu") && !pathname.startsWith("/menu/administrar")) {
     const segments = pathname.split("/").filter(Boolean);
     const qrToken = segments[1] ?? "global";
     const ip =

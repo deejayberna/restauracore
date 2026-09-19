@@ -32,7 +32,10 @@ export default async function MenuPage({ params }: Props) {
   if (!restaurante) notFound();
 
   const categorias = await db.query.categoriasMenu.findMany({
-    where: eq(categoriasMenu.restaurante_id, restaurante.id),
+    where: and(
+      eq(categoriasMenu.restaurante_id, restaurante.id),
+      eq(categoriasMenu.activo, true)
+    ),
     orderBy: (cat, { asc }) => [asc(cat.orden)],
   });
 

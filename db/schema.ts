@@ -117,6 +117,7 @@ export const categoriasMenu = pgTable("categorias_menu", {
     .references(() => restaurantes.id),
   nombre: text("nombre").notNull(),
   orden: integer("orden").notNull().default(0),
+  activo: boolean("activo").notNull().default(true),
 });
 
 export const platillos = pgTable("platillos", {

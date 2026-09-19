@@ -22,6 +22,7 @@ import {
   Menu,
   X,
   Store,
+  BookOpen,
 } from "lucide-react";
 import { BranchSwitcher, type BranchInfo } from "./BranchSwitcher";
 import { NotificationBell, type NotificationCounts } from "./NotificationBell";
@@ -74,6 +75,12 @@ export function NavigationShell({
       href: "/mesas",
       icon: <UtensilsCrossed className="w-5 h-5" />,
       roles: ["mesero", "gerente", "dueno"],
+    },
+    {
+      label: "Administrar Menú",
+      href: "/menu/administrar",
+      icon: <BookOpen className="w-5 h-5" />,
+      roles: ["gerente", "dueno"],
     },
     {
       label: "Cocina KDS",
