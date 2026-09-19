@@ -35,7 +35,7 @@ export async function validarSuperAdmin() {
     throw new UnauthorizedError("Acceso denegado: Sesión no iniciada.");
   }
 
-  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "admin@restauracore.com,superadmin@restauracore.com")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);

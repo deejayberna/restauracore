@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
     }
 
-    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "admin@restauracore.com,superadmin@restauracore.com")
       .split(",")
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
