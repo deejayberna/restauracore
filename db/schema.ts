@@ -482,8 +482,25 @@ export const stripeEventosProcesados = pgTable("stripe_eventos_procesados", {
   procesado_en: timestamp("procesado_en").notNull().defaultNow(),
 });
 
+export const ticketsSoporte = pgTable("tickets_soporte", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  restaurante_id: uuid("restaurante_id")
+    .notNull()
+    .references(() => restaurantes.id, { onDelete: "cascade" }),
+  usuario_id: uuid("usuario_id")
+    .notNull()
+    .references(() => usuarios.id, { onDelete: "cascade" }),
+  asunto: text("asunto").notNull(),
+  mensaje: text("mensaje").notNull(),
+  estado: text("estado").notNull().default("abierto"), // "abierto" | "en_proceso" | "resuelto"
+  respuesta: text("respuesta"),
+  respondido_por: uuid("respondido_por").references(() => usuarios.id, { onDelete: "set null" }),
+  creado_en: timestamp("creado_en").notNull().defaultNow(),
+  respondido_en: timestamp("respondido_en"),
+});
 
 // ─── Relaciones ──────────────────────────────────────────────────────────────
+
 
 export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   usuarioRestaurantes: many(usuarioRestaurantes),
@@ -500,6 +517,7 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   turnos: many(turnos),
   reportesDiariosEnviados: many(reportesDiariosEnviados),
   recordatoriosTrialEnviados: many(recordatoriosTrialEnviados),
+  ticketsSoporte: many(ticketsSoporte),
 }));
 
 export const turnosRelations = relations(turnos, ({ one }) => ({
@@ -609,7 +627,23 @@ export const compraItemsRelations = relations(compraItems, ({ one }) => ({
   }),
 }));
 
+export const ticketsSoporteRelations = relations(ticketsSoporte, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [ticketsSoporte.restaurante_id],
+    references: [restaurantes.id],
+  }),
+  usuario: one(usuarios, {
+    fields: [ticketsSoporte.usuario_id],
+    references: [usuarios.id],
+  }),
+  respondidoPor: one(usuarios, {
+    fields: [ticketsSoporte.respondido_por],
+    references: [usuarios.id],
+  }),
+}));
+
 // ─── Tipos inferidos ─────────────────────────────────────────────────────────
+
 
 export type Restaurante = InferSelectModel<typeof restaurantes>;
 export type NuevoRestaurante = InferInsertModel<typeof restaurantes>;
@@ -688,3 +722,7 @@ export type NuevoRegistroPendiente = InferInsertModel<typeof registrosPendientes
 
 export type StripeEventoProcesado = InferSelectModel<typeof stripeEventosProcesados>;
 export type NuevoStripeEventoProcesado = InferInsertModel<typeof stripeEventosProcesados>;
+
+export type TicketSoporte = InferSelectModel<typeof ticketsSoporte>;
+export type NuevoTicketSoporte = InferInsertModel<typeof ticketsSoporte>;
+

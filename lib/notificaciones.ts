@@ -876,3 +876,94 @@ async function enviarEmailRecordatorioTrial(payload: RecordatorioTrialPayload): 
     throw new Error(`Resend retornó status ${res.status}`);
   }
 }
+
+// ─── Notificación de Nuevo Ticket de Soporte (para el Dueño del SaaS) ─────────
+
+export interface NuevoTicketSoportePayload {
+  ticketId: string;
+  restaurante: string;
+  usuarioNombre: string;
+  usuarioEmail: string;
+  asunto: string;
+  mensaje: string;
+}
+
+export async function notificarNuevoTicketSoporte(
+  payload: NuevoTicketSoportePayload
+): Promise<void> {
+  await Promise.allSettled([
+    enviarTelegramNuevoTicket(payload),
+    enviarEmailNuevoTicket(payload),
+  ]);
+}
+
+async function enviarTelegramNuevoTicket(
+  payload: NuevoTicketSoportePayload
+): Promise<void> {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  const chat_id = process.env.TELEGRAM_CHAT_ID_GERENTE;
+  if (!chat_id) return;
+
+  const texto =
+    `🎫 *NUEVO TICKET DE SOPORTE — RestauraCore*\n\n` +
+    `🏠 *Restaurante:* ${payload.restaurante}\n` +
+    `👤 *Usuario:* ${payload.usuarioNombre} (${payload.usuarioEmail})\n` +
+    `📌 *Asunto:* ${payload.asunto}\n` +
+    `💬 *Mensaje:*\n${payload.mensaje}\n\n` +
+    `👉 _Ingresa al panel Super-Admin (/superadmin) para responder._`;
+
+  const res = await fetch(
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id,
+        text: texto,
+        parse_mode: "Markdown",
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    console.error("[Notificaciones Ticket] Error Telegram:", await res.text());
+  }
+}
+
+async function enviarEmailNuevoTicket(
+  payload: NuevoTicketSoportePayload
+): Promise<void> {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return;
+  const destinatario = process.env.GERENTE_EMAIL || process.env.RESEND_FROM_EMAIL;
+  if (!destinatario) return;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: destinatario,
+      subject: `🎫 [Soporte SaaS] Nuevo Ticket: ${payload.asunto} — ${payload.restaurante}`,
+      html: `
+        <h2>🎫 Nuevo Ticket de Soporte Levantado</h2>
+        <p><strong>Restaurante:</strong> ${payload.restaurante}</p>
+        <p><strong>Usuario:</strong> ${payload.usuarioNombre} (${payload.usuarioEmail})</p>
+        <p><strong>Asunto:</strong> ${payload.asunto}</p>
+        <hr/>
+        <p><strong>Mensaje:</strong></p>
+        <blockquote style="background:#f4f4f5;padding:12px;border-left:4px solid #f97316;">
+          ${payload.mensaje.replace(/\n/g, "<br/>")}
+        </blockquote>
+        <br/>
+        <p>Puedes responder este ticket ingresando al panel de Super-Admin en <a href="https://restauracore.vercel.app/superadmin">/superadmin</a>.</p>
+      `,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error("[Notificaciones Ticket] Error Resend:", await res.text());
+  }
+}

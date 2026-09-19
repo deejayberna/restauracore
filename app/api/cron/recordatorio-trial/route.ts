@@ -22,13 +22,19 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const forzarEnvio = searchParams.get("force") === "true";
+  const filtroRestauranteId = searchParams.get("restaurante_id");
 
   const ahora = new Date();
 
-  // 2. Obtener todos los restaurantes actualmente en periodo 'trial'
+  // 2. Obtener los restaurantes en periodo 'trial' (o el restaurante específico si se indica)
+  const whereClause = filtroRestauranteId
+    ? and(eq(restaurantes.estado_suscripcion, "trial"), eq(restaurantes.id, filtroRestauranteId))
+    : eq(restaurantes.estado_suscripcion, "trial");
+
   const restaurantesEnTrial = await db.query.restaurantes.findMany({
-    where: eq(restaurantes.estado_suscripcion, "trial"),
+    where: whereClause,
   });
+
 
   const resultados: {
     restaurante_id: string;

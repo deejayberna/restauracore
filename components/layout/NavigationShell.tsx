@@ -23,7 +23,9 @@ import {
   X,
   Store,
   BookOpen,
+  LifeBuoy,
 } from "lucide-react";
+
 import { BranchSwitcher, type BranchInfo } from "./BranchSwitcher";
 import { NotificationBell, type NotificationCounts } from "./NotificationBell";
 import { Badge } from "@/components/ui/Badge";
@@ -156,7 +158,14 @@ export function NavigationShell({
       icon: <Store className="w-5 h-5" />,
       roles: ["dueno"],
     },
+    {
+      label: "Soporte",
+      href: "/soporte",
+      icon: <LifeBuoy className="w-5 h-5" />,
+      roles: ["gerente", "dueno"],
+    },
   ];
+
 
   // Filtrar según el rol del usuario
   const allowedItems = allNavItems.filter((item) => item.roles.includes(user.rol));

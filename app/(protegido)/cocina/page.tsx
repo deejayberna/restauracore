@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getItemsKDS } from "@/lib/kds-queries";
 import { TableroKDS } from "@/components/kds/TableroKDS";
+import { db } from "@/db";
+import { restaurantes } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export default async function CocinaPage() {
   const cookieStore = await cookies();
@@ -9,7 +12,13 @@ export default async function CocinaPage() {
 
   if (!restaurante_id) redirect("/seleccionar-restaurante");
 
-  const items = await getItemsKDS(restaurante_id);
+  const [items, rest] = await Promise.all([
+    getItemsKDS(restaurante_id),
+    db.query.restaurantes.findFirst({
+      where: eq(restaurantes.id, restaurante_id),
+      columns: { nombre: true },
+    }),
+  ]);
 
   return (
     <main>
@@ -19,7 +28,11 @@ export default async function CocinaPage() {
           Actualizaciones en tiempo real
         </span>
       </div>
-      <TableroKDS itemsIniciales={items} restaurante_id={restaurante_id} />
+      <TableroKDS
+        itemsIniciales={items}
+        restaurante_id={restaurante_id}
+        restauranteNombre={rest?.nombre ?? "Cocina"}
+      />
     </main>
   );
 }

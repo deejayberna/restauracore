@@ -47,6 +47,8 @@ ALTER TABLE solicitudes_cancelacion_item ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pagos                        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registros_pendientes         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stripe_eventos_procesados    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tickets_soporte              ENABLE ROW LEVEL SECURITY;
+
 
 -- ─── 3. TRIGGERS DEL SISTEMA ──────────────────────────────────
 
@@ -638,3 +640,15 @@ BEGIN
     ';
   END IF;
 END $$;
+
+-- ─── 8. Políticas para tickets_soporte ───────────────────────────
+DROP POLICY IF EXISTS "tickets_soporte_select_tenant" ON tickets_soporte;
+CREATE POLICY "tickets_soporte_select_tenant" ON tickets_soporte
+  FOR SELECT TO authenticated
+  USING (restaurante_id IN (SELECT restaurantes_activos_del_usuario()));
+
+DROP POLICY IF EXISTS "tickets_soporte_insert_tenant" ON tickets_soporte;
+CREATE POLICY "tickets_soporte_insert_tenant" ON tickets_soporte
+  FOR INSERT TO authenticated
+  WITH CHECK (restaurante_id IN (SELECT restaurantes_activos_del_usuario()));
+

@@ -176,11 +176,14 @@ describe("Seguridad del Registro y Cron de Recordatorios de Trial (Días 12 y 13
       const cronSecret = process.env.CRON_SECRET || "cron-test-secret";
       process.env.CRON_SECRET = cronSecret;
 
-      const req = new NextRequest("http://localhost:3000/api/cron/recordatorio-trial?force=true", {
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-        },
-      });
+      const req = new NextRequest(
+        `http://localhost:3000/api/cron/recordatorio-trial?force=true&restaurante_id=${restauranteTrial.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${cronSecret}`,
+          },
+        }
+      );
 
       const res = await recordatorioTrialCronGET(req);
       expect(res.status).toBe(200);
@@ -211,11 +214,15 @@ describe("Seguridad del Registro y Cron de Recordatorios de Trial (Días 12 y 13
       const spyNotif = vi.spyOn(notificaciones, "enviarNotificacionRecordatorioTrial").mockResolvedValue();
 
       const cronSecret = process.env.CRON_SECRET || "cron-test-secret";
-      const req = new NextRequest("http://localhost:3000/api/cron/recordatorio-trial?force=true", {
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-        },
-      });
+      const req = new NextRequest(
+        `http://localhost:3000/api/cron/recordatorio-trial?force=true&restaurante_id=${restauranteTrial.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${cronSecret}`,
+          },
+        }
+      );
+
 
       const res = await recordatorioTrialCronGET(req);
       expect(res.status).toBe(200);
@@ -253,11 +260,15 @@ describe("Seguridad del Registro y Cron de Recordatorios de Trial (Días 12 y 13
         .mockRejectedValueOnce(new Error("Fallo de conexión simulado con Resend y Telegram"));
 
       const cronSecret = process.env.CRON_SECRET || "cron-test-secret";
-      const req = new NextRequest("http://localhost:3000/api/cron/recordatorio-trial?force=true", {
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-        },
-      });
+      const req = new NextRequest(
+        `http://localhost:3000/api/cron/recordatorio-trial?force=true&restaurante_id=${rest1d.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${cronSecret}`,
+          },
+        }
+      );
+
 
       const res = await recordatorioTrialCronGET(req);
       expect(res.status).toBe(200);

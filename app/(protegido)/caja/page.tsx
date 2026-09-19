@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import { DollarSign, Coins, Clock, ArrowRight, ShieldCheck } from "lucide-react";
 import { db } from "@/db";
-import { turnos, usuarios } from "@/db/schema";
+import { turnos, usuarios, ordenes, mesas } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { SeccionRecibosCaja } from "@/components/caja/SeccionRecibosCaja";
+
 
 export default async function CajaDashboardPage() {
   const { user, currentBranchId } = await getProtectedLayoutData();
@@ -40,6 +42,26 @@ export default async function CajaDashboardPage() {
     .where(eq(turnos.restaurante_id, currentBranchId))
     .orderBy(desc(turnos.fecha_inicio))
     .limit(5);
+
+  // Órdenes cobradas recientes para emisión y reimpresión de recibos
+  const ordenesCobradas = await db
+    .select({
+      id: ordenes.id,
+      total: ordenes.total,
+      creado_en: ordenes.creado_en,
+      mesa_numero: mesas.numero,
+    })
+    .from(ordenes)
+    .leftJoin(mesas, eq(mesas.id, ordenes.mesa_id))
+    .where(
+      and(
+        eq(ordenes.restaurante_id, currentBranchId),
+        eq(ordenes.estado, "pagado")
+      )
+    )
+    .orderBy(desc(ordenes.creado_en))
+    .limit(5);
+
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -109,8 +131,12 @@ export default async function CajaDashboardPage() {
         </Card>
       </div>
 
+      {/* Emisión e Impresión de Recibos Térmicos */}
+      <SeccionRecibosCaja ordenesRecientes={ordenesCobradas} />
+
       {/* Turnos Recientes */}
       <Card>
+
         <CardHeader>
           <CardTitle className="text-sm">Historial de Turnos Recientes</CardTitle>
           <CardDescription>Últimos cortes registrados en esta sucursal</CardDescription>

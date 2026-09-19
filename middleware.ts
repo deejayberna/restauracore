@@ -18,13 +18,39 @@ const RUTAS_PROTEGIDAS: Record<string, string[]> = {
   "/mesas": ["mesero", "gerente", "dueno"],
   "/restaurante": ["dueno"],
   "/menu/administrar": ["gerente", "dueno"],
+  "/soporte": ["gerente", "dueno"],
 };
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const pathname = request.nextUrl.pathname;
 
+  // 0. Control de Acceso perimetral en el Edge para Super-Admin (/superadmin)
+  // No requiere cookie restaurante_activo — desacoplado a nivel SaaS global
+  if (pathname.startsWith("/superadmin")) {
+    const supabase = createSupabaseMiddlewareClient(request, response);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user || !user.email) {
+      return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+    }
+
+    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!superAdminEmails.includes(user.email.toLowerCase())) {
+      return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+    }
+
+    return response;
+  }
+
   // 1. Rate Limiting perimetral para menú público (/menu/[qrToken])
+
   if (pathname.startsWith("/menu") && !pathname.startsWith("/menu/administrar")) {
     const segments = pathname.split("/").filter(Boolean);
     const qrToken = segments[1] ?? "global";
@@ -122,7 +148,10 @@ export const config = {
     "/perfil/:path*",
     "/mesas/:path*",
     "/restaurante/:path*",
+    "/soporte/:path*",
+    "/superadmin/:path*",
   ],
 };
+
 
 
