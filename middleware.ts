@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
     }
 
-    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "admin@restauracore.com,superadmin@restauracore.com")
+    // SEGURIDAD: NUNCA agregar un email real aquí como fallback — esta lista debe vivir EXCLUSIVAMENTE en la variable de entorno de Vercel
+    const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
       .split(",")
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
