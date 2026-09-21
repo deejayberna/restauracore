@@ -34,7 +34,9 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user || !user.email) {
-      return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+      const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+      redirectRes.headers.set("x-superadmin-reject-reason", "no-user");
+      return redirectRes;
     }
 
     // SEGURIDAD: NUNCA agregar un email real aquí como fallback — esta lista debe vivir EXCLUSIVAMENTE en la variable de entorno de Vercel
@@ -49,7 +51,10 @@ export async function middleware(request: NextRequest) {
       .filter(Boolean);
 
     if (!superAdminEmails.includes(user.email.toLowerCase())) {
-      return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+      const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
+      redirectRes.headers.set("x-superadmin-reject-reason", "email-not-in-list");
+      redirectRes.headers.set("x-superadmin-count", String(superAdminEmails.length));
+      return redirectRes;
     }
 
     return response;
