@@ -45,6 +45,16 @@ export async function loginAction(_prevState: unknown, formData: FormData): Prom
 
   if (!user) return { error: "No se pudo obtener el usuario" };
 
+  // Si el usuario es Super-Admin de RestauraCore, redirigir directamente al panel superadmin
+  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (user.email && superAdminEmails.includes(user.email.toLowerCase())) {
+    redirect("/superadmin");
+  }
+
   // Buscar vínculos activos del usuario en usuario_restaurantes
   const usuario = await db.query.usuarios.findFirst({
     where: eq(usuarios.auth_id, user.id),
