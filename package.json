@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx db/seed.ts"
+    "db:seed": "tsx db/seed.ts",
+    "set-admin-password": "node scripts/set_admin_password.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
