@@ -97,3 +97,4 @@ main().catch((err) => {
   console.error('❌ Error inesperado:', err);
   process.exit(1);
 });
+
