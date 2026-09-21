@@ -36,9 +36,14 @@ export async function validarSuperAdmin() {
   }
 
   // SEGURIDAD: NUNCA agregar un email real aquí como fallback — esta lista debe vivir EXCLUSIVAMENTE en la variable de entorno de Vercel
-  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+  const rawSuperAdmins =
+    process.env.SUPER_ADMIN_EMAILS ||
+    process.env.SUPER_ADMIN_EMAIL ||
+    process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ||
+    "";
+  const superAdminEmails = rawSuperAdmins
     .split(",")
-    .map((e) => e.trim().toLowerCase())
+    .map((e) => e.replace(/['"]/g, "").trim().toLowerCase())
     .filter(Boolean);
 
   if (superAdminEmails.length === 0 || !superAdminEmails.includes(user.email.toLowerCase())) {

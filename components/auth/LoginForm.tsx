@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useActionState, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { loginAction } from "@/lib/auth-actions";
 import {
@@ -19,8 +19,34 @@ import {
 } from "lucide-react";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
-  const [state, formAction, pending] = useActionState(loginAction, undefined);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    const formData = new FormData(e.currentTarget);
+    try {
+      const res = await loginAction(null, formData);
+      if (res?.error) {
+        setErrorMessage(res.error);
+        setIsSubmitting(false);
+        return;
+      }
+      if (res?.redirectUrl) {
+        window.location.href = res.redirectUrl;
+        return;
+      }
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message || "Ocurrió un error al procesar el inicio de sesión."
+      );
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -71,20 +97,20 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         )}
 
         {/* Alerta de Error de Autenticación */}
-        {state?.error && (
+        {errorMessage && (
           <div className="mb-5 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-3 animate-in fade-in duration-150">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div>
               <strong className="block text-rose-300 font-semibold mb-0.5">
                 Error de Acceso
               </strong>
-              <span>{state.error}</span>
+              <span>{errorMessage}</span>
             </div>
           </div>
         )}
 
         {/* Formulario */}
-        <form action={formAction} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="email"
@@ -103,7 +129,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 required
                 autoComplete="email"
                 placeholder="ejemplo@restauracore.com"
-                disabled={pending}
+                disabled={isSubmitting}
                 className="w-full pl-10 pr-4 py-2.5 min-h-[44px] bg-slate-950/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
@@ -127,7 +153,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 required
                 autoComplete="current-password"
                 placeholder="••••••••••••"
-                disabled={pending}
+                disabled={isSubmitting}
                 className="w-full pl-10 pr-11 py-2.5 min-h-[44px] bg-slate-950/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <button
@@ -148,10 +174,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={isSubmitting}
             className="w-full mt-2 min-h-[46px] px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            {pending ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Verificando credenciales...</span>

@@ -14,11 +14,19 @@ const loginSchema = z.object({
   password: z.string().min(6, "Mínimo 6 caracteres"),
 });
 
-export async function loginAction(_prevState: unknown, formData: FormData): Promise<{ error: string } | void> {
-  const data = validateOrThrow(loginSchema, {
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+export async function loginAction(
+  _prevState: unknown,
+  formData: FormData
+): Promise<{ error?: string; redirectUrl?: string }> {
+  let data;
+  try {
+    data = validateOrThrow(loginSchema, {
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
+  } catch (err: any) {
+    return { error: err?.message || "Datos de acceso inválidos." };
+  }
 
   // Rate limiting contra fuerza bruta por IP
   let ip = "127.0.0.1";
@@ -37,7 +45,15 @@ export async function loginAction(_prevState: unknown, formData: FormData): Prom
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword(data);
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.message.toLowerCase().includes("invalid login credentials")) {
+      return { error: "Correo o contraseña incorrectos. Verifica tus datos e intenta nuevamente." };
+    }
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      return { error: "El correo aún no ha sido confirmado. Revisa tu bandeja de entrada." };
+    }
+    return { error: error.message };
+  }
 
   const {
     data: { user },
@@ -46,19 +62,47 @@ export async function loginAction(_prevState: unknown, formData: FormData): Prom
   if (!user) return { error: "No se pudo obtener el usuario" };
 
   // Si el usuario es Super-Admin de RestauraCore, redirigir directamente al panel superadmin
-  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "")
+  const rawSuperAdmins =
+    process.env.SUPER_ADMIN_EMAILS ||
+    process.env.SUPER_ADMIN_EMAIL ||
+    process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ||
+    "";
+  const superAdminEmails = rawSuperAdmins
     .split(",")
-    .map((e) => e.trim().toLowerCase())
+    .map((e) => e.replace(/['"]/g, "").trim().toLowerCase())
     .filter(Boolean);
 
   if (user.email && superAdminEmails.includes(user.email.toLowerCase())) {
-    redirect("/superadmin");
+    return { redirectUrl: "/superadmin" };
   }
 
   // Buscar vínculos activos del usuario en usuario_restaurantes
-  const usuario = await db.query.usuarios.findFirst({
+  let usuario = await db.query.usuarios.findFirst({
     where: eq(usuarios.auth_id, user.id),
   });
+
+  if (!usuario && user.email) {
+    try {
+      const [nuevo] = await db
+        .insert(usuarios)
+        .values({
+          auth_id: user.id,
+          email: user.email,
+          nombre: user.user_metadata?.nombre || user.email.split("@")[0],
+          activo: true,
+        })
+        .onConflictDoUpdate({
+          target: usuarios.auth_id,
+          set: { email: user.email, activo: true },
+        })
+        .returning();
+      usuario = nuevo;
+    } catch {
+      usuario = await db.query.usuarios.findFirst({
+        where: eq(usuarios.auth_id, user.id),
+      });
+    }
+  }
 
   if (!usuario) return { error: "Usuario no registrado en el sistema" };
 
@@ -77,7 +121,12 @@ export async function loginAction(_prevState: unknown, formData: FormData): Prom
       )
     );
 
-  if (vinculos.length === 0) return { error: "Sin restaurantes asignados" };
+  if (vinculos.length === 0) {
+    if (user.email && superAdminEmails.includes(user.email.toLowerCase())) {
+      return { redirectUrl: "/superadmin" };
+    }
+    return { error: "Tu usuario no tiene restaurantes asignados aún. Contacta a soporte o al administrador." };
+  }
 
   const cookieStore = await cookies();
 
@@ -89,11 +138,11 @@ export async function loginAction(_prevState: unknown, formData: FormData): Prom
       sameSite: "lax",
       path: "/",
     });
-    redirect("/dashboard");
+    return { redirectUrl: "/dashboard" };
   }
 
   // Más de un restaurante — redirigir al selector
-  redirect("/seleccionar-restaurante");
+  return { redirectUrl: "/seleccionar-restaurante" };
 }
 
 export async function logoutAction() {
