@@ -8,12 +8,14 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL no está definida en las variables de entorno");
-}
+const databaseUrl = process.env.DATABASE_URL;
 
-// Conexión directa a Postgres (solo para Drizzle — queries, mutaciones, migraciones)
-// NO uses esta conexión para Auth ni Realtime — usa @supabase/supabase-js para eso
-const client = postgres(process.env.DATABASE_URL, { prepare: false });
+// Conexión a Postgres para Drizzle
+// Durante la fase de build estático en CI/Vercel, si DATABASE_URL no está inyectada en el entorno de compilación,
+// se usa un endpoint dummy para permitir que Next.js compile las rutas sin abortar el proceso.
+const client = postgres(
+  databaseUrl || "postgresql://postgres:postgres@127.0.0.1:5432/build_dummy",
+  { prepare: false }
+);
 
 export const db = drizzle(client, { schema });
