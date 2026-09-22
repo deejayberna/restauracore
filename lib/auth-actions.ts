@@ -8,7 +8,7 @@ import { eq, and } from "drizzle-orm";
 import { validateOrThrow, z } from "@/lib/validation";
 import { cookies, headers } from "next/headers";
 import { checkRateLimitLogin } from "@/lib/rate-limiter";
-import { isSuperAdminEmail } from "@/lib/superadmin-utils";
+import { isSuperAdminEmail, getSuperAdminEmails } from "@/lib/superadmin-utils";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -62,13 +62,27 @@ export async function loginAction(
 
   if (!user) return { error: "No se pudo obtener el usuario" };
 
+  // ── DEBUG: Diagnóstico de login (TEMPORAL — eliminar tras confirmar) ──
+  console.log("=== [DEBUG LOGIN INICIO] ===");
+  console.log("Email recibido en Form:", data?.email);
+  console.log("Email de user Supabase:", user?.email);
+  console.log("process.env.SUPER_ADMIN_EMAILS:", process.env.SUPER_ADMIN_EMAILS);
+  console.log("process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS:", process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS);
+  console.log("getSuperAdminEmails():", getSuperAdminEmails());
+  console.log("Resultado isSuperAdminEmail(user.email):", isSuperAdminEmail(user?.email ?? ""));
+  console.log("Resultado isSuperAdminEmail(data.email):", isSuperAdminEmail(data?.email ?? ""));
+  console.log("=== [DEBUG LOGIN FIN] ===");
+
   // ── Super-Admin: bypass completo ──
   // Verificamos ambas fuentes de email (Supabase y formulario) para
   // robustez. Un super admin no necesita registro en `usuarios` ni
   // vínculos en `usuario_restaurantes`.
   if (isSuperAdminEmail(user.email) || isSuperAdminEmail(data.email)) {
+    console.log("[LOGIN] Super-Admin detectado, redirigiendo a /superadmin");
     return { redirectUrl: "/superadmin" };
   }
+
+  console.log("[LOGIN] No es super-admin, continuando flujo normal de restaurantes...");
 
   // Buscar vínculos activos del usuario en usuario_restaurantes
   let usuario = await db.query.usuarios.findFirst({
