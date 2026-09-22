@@ -3,15 +3,12 @@
  * Compatible con Edge Runtime (middleware.ts), Server Actions y Node.js.
  * 
  * SEGURIDAD:
- * - Lee exclusivamente SUPER_ADMIN_EMAILS (o SUPER_ADMIN_EMAIL como fallback).
- * - NUNCA usar NEXT_PUBLIC_* para listas de administradores para evitar filtración al cliente.
+ * - Lee exclusivamente la variable de entorno SUPER_ADMIN_EMAILS.
+ * - NUNCA usar valores hardcodeados ni NEXT_PUBLIC_* para listas de administradores.
  */
 
 export function getSuperAdminEmails(): string[] {
-  const rawSuperAdmins =
-    process.env.SUPER_ADMIN_EMAILS ||
-    process.env.SUPER_ADMIN_EMAIL ||
-    "";
+  const rawSuperAdmins = process.env.SUPER_ADMIN_EMAILS || "";
 
   return rawSuperAdmins
     .split(",")
