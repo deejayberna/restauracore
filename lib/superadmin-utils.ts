@@ -24,3 +24,4 @@ export function isSuperAdminEmail(email: string | null | undefined): boolean {
   const emails = getSuperAdminEmails();
   return emails.includes(email.trim().toLowerCase());
 }
+
