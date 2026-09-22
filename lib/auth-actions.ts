@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm";
 import { validateOrThrow, z } from "@/lib/validation";
 import { cookies, headers } from "next/headers";
 import { checkRateLimitLogin } from "@/lib/rate-limiter";
+import { isSuperAdminEmail } from "@/lib/superadmin-utils";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -61,18 +62,9 @@ export async function loginAction(
 
   if (!user) return { error: "No se pudo obtener el usuario" };
 
-  // Si el usuario es Super-Admin de RestauraCore, redirigir directamente al panel superadmin
-  const rawSuperAdmins =
-    process.env.SUPER_ADMIN_EMAILS ||
-    process.env.SUPER_ADMIN_EMAIL ||
-    process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ||
-    "";
-  const superAdminEmails = rawSuperAdmins
-    .split(",")
-    .map((e) => e.replace(/['"]/g, "").trim().toLowerCase())
-    .filter(Boolean);
-
-  if (user.email && superAdminEmails.includes(user.email.toLowerCase())) {
+  // 1. ANTES de revisar usuario_restaurantes: Si el usuario es Super-Admin, redirigir directo a /superadmin
+  const emailVerificar = user.email || data.email;
+  if (isSuperAdminEmail(emailVerificar)) {
     return { redirectUrl: "/superadmin" };
   }
 
@@ -122,7 +114,7 @@ export async function loginAction(
     );
 
   if (vinculos.length === 0) {
-    if (user.email && superAdminEmails.includes(user.email.toLowerCase())) {
+    if (isSuperAdminEmail(emailVerificar)) {
       return { redirectUrl: "/superadmin" };
     }
     return { error: "Tu usuario no tiene restaurantes asignados aún. Contacta a soporte o al administrador." };

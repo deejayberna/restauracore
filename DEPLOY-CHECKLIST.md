@@ -23,7 +23,6 @@ Asegúrate de marcar la casilla **Production** y hacer un **Redeploy** para que 
 | Variable | Qué poner | Estado en Vercel Production |
 | :--- | :--- | :--- |
 | **`SUPER_ADMIN_EMAILS`** | Correo del dueño del SaaS (ejemplo: `berna241190@hotmail.com`). Si son varios, separados por coma. | ⚠️ **Requiere verificar valor exacto y redeploy** |
-| **`NEXT_PUBLIC_SUPER_ADMIN_EMAILS`** *(Opcional / Recomendado)* | El mismo valor (`berna241190@hotmail.com`). Garantiza que el runtime Edge de Vercel lo compile directamente en el middleware. | ⚠️ Recomendado agregar |
 
 ---
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient } from "@/lib/supabase-middleware";
 import { checkRateLimitMenu } from "@/lib/rate-limiter";
+import { isSuperAdminEmail, getSuperAdminEmails } from "@/lib/superadmin-utils";
 
 const RUTAS_PROTEGIDAS: Record<string, string[]> = {
   "/dashboard": ["dueno"], // Fase 7: Dashboard multi-sucursal exclusivo del Dueño
@@ -39,21 +40,10 @@ export async function middleware(request: NextRequest) {
       return redirectRes;
     }
 
-    // SEGURIDAD: NUNCA agregar un email real aquí como fallback — esta lista debe vivir EXCLUSIVAMENTE en la variable de entorno de Vercel
-    const rawSuperAdmins =
-      process.env.SUPER_ADMIN_EMAILS ||
-      process.env.SUPER_ADMIN_EMAIL ||
-      process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ||
-      "";
-    const superAdminEmails = rawSuperAdmins
-      .split(",")
-      .map((e) => e.replace(/['"]/g, "").trim().toLowerCase())
-      .filter(Boolean);
-
-    if (!superAdminEmails.includes(user.email.toLowerCase())) {
+    if (!isSuperAdminEmail(user.email)) {
       const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
       redirectRes.headers.set("x-superadmin-reject-reason", "email-not-in-list");
-      redirectRes.headers.set("x-superadmin-count", String(superAdminEmails.length));
+      redirectRes.headers.set("x-superadmin-count", String(getSuperAdminEmails().length));
       return redirectRes;
     }
 
