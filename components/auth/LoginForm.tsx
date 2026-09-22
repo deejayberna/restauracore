@@ -31,26 +31,35 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     const formData = new FormData(e.currentTarget);
     try {
       const res = await loginAction(null, formData);
-      if (res?.error) {
-        setErrorMessage(res.error);
-        setIsSubmitting(false);
-        return;
+      // Verificar que res sea un objeto válido con propiedades string
+      if (res && typeof res === "object") {
+        if (res.error) {
+          setErrorMessage(
+            typeof res.error === "string"
+              ? res.error
+              : "Ocurrió un error al procesar el inicio de sesión."
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        if (res.redirectUrl && typeof res.redirectUrl === "string") {
+          window.location.href = res.redirectUrl;
+          return;
+        }
       }
-      if (res?.redirectUrl) {
-        window.location.href = res.redirectUrl;
-        return;
-      }
+      // Si res no tiene ni error ni redirectUrl, algo salió mal
+      setErrorMessage("Respuesta inesperada del servidor. Intenta de nuevo.");
+      setIsSubmitting(false);
     } catch (err: any) {
-      // Extraer mensaje legible; un error de Server Action puede llegar como
-      // string con payload RSC embebido si el boundary falla.
-      const raw = typeof err?.message === "string" ? err.message : "";
-      const isPayloadLeak =
-        raw.length > 200 || raw.includes("$@") || raw.includes("\\n");
-      setErrorMessage(
-        isPayloadLeak
-          ? "Ocurrió un error inesperado al procesar el inicio de sesión. Intenta de nuevo."
-          : raw || "Ocurrió un error al procesar el inicio de sesión."
-      );
+      // Nunca renderizar objetos, digests ni payloads RSC crudos.
+      // Extraer solo strings legibles.
+      const msg =
+        typeof err === "string"
+          ? err
+          : typeof err?.message === "string" && err.message.length < 200
+            ? err.message
+            : "Ocurrió un error inesperado al procesar el inicio de sesión. Intenta de nuevo.";
+      setErrorMessage(msg);
       setIsSubmitting(false);
     }
   }

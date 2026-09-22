@@ -44,110 +44,121 @@ export async function loginAction(
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword(data);
 
-  if (error) {
-    if (error.message.toLowerCase().includes("invalid login credentials")) {
-      return { error: "Correo o contraseña incorrectos. Verifica tus datos e intenta nuevamente." };
+  try {
+    const { error } = await supabase.auth.signInWithPassword(data);
+
+    if (error) {
+      if (error.message.toLowerCase().includes("invalid login credentials")) {
+        return { error: "Correo o contraseña incorrectos. Verifica tus datos e intenta nuevamente." };
+      }
+      if (error.message.toLowerCase().includes("email not confirmed")) {
+        return { error: "El correo aún no ha sido confirmado. Revisa tu bandeja de entrada." };
+      }
+      return { error: error.message };
     }
-    if (error.message.toLowerCase().includes("email not confirmed")) {
-      return { error: "El correo aún no ha sido confirmado. Revisa tu bandeja de entrada." };
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { error: "No se pudo obtener el usuario" };
+
+    // ── DEBUG: Diagnóstico de login (TEMPORAL — eliminar tras confirmar) ──
+    console.log("=== [DEBUG LOGIN INICIO] ===");
+    console.log("Email recibido en Form:", data?.email);
+    console.log("Email de user Supabase:", user?.email);
+    console.log("process.env.SUPER_ADMIN_EMAILS:", process.env.SUPER_ADMIN_EMAILS);
+    console.log("process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS:", process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS);
+    console.log("getSuperAdminEmails():", getSuperAdminEmails());
+    console.log("Resultado isSuperAdminEmail(user.email):", isSuperAdminEmail(user?.email ?? ""));
+    console.log("Resultado isSuperAdminEmail(data.email):", isSuperAdminEmail(data?.email ?? ""));
+    console.log("=== [DEBUG LOGIN FIN] ===");
+
+    // ── Super-Admin: bypass completo ──
+    // Verificamos ambas fuentes de email (Supabase y formulario) para
+    // robustez. Un super admin no necesita registro en `usuarios` ni
+    // vínculos en `usuario_restaurantes`.
+    if (isSuperAdminEmail(user.email) || isSuperAdminEmail(data.email)) {
+      console.log("[LOGIN] Super-Admin detectado, redirigiendo a /superadmin");
+      return { redirectUrl: "/superadmin" };
     }
-    return { error: error.message };
-  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    console.log("[LOGIN] No es super-admin, continuando flujo normal de restaurantes...");
 
-  if (!user) return { error: "No se pudo obtener el usuario" };
-
-  // ── DEBUG: Diagnóstico de login (TEMPORAL — eliminar tras confirmar) ──
-  console.log("=== [DEBUG LOGIN INICIO] ===");
-  console.log("Email recibido en Form:", data?.email);
-  console.log("Email de user Supabase:", user?.email);
-  console.log("process.env.SUPER_ADMIN_EMAILS:", process.env.SUPER_ADMIN_EMAILS);
-  console.log("process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS:", process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS);
-  console.log("getSuperAdminEmails():", getSuperAdminEmails());
-  console.log("Resultado isSuperAdminEmail(user.email):", isSuperAdminEmail(user?.email ?? ""));
-  console.log("Resultado isSuperAdminEmail(data.email):", isSuperAdminEmail(data?.email ?? ""));
-  console.log("=== [DEBUG LOGIN FIN] ===");
-
-  // ── Super-Admin: bypass completo ──
-  // Verificamos ambas fuentes de email (Supabase y formulario) para
-  // robustez. Un super admin no necesita registro en `usuarios` ni
-  // vínculos en `usuario_restaurantes`.
-  if (isSuperAdminEmail(user.email) || isSuperAdminEmail(data.email)) {
-    console.log("[LOGIN] Super-Admin detectado, redirigiendo a /superadmin");
-    return { redirectUrl: "/superadmin" };
-  }
-
-  console.log("[LOGIN] No es super-admin, continuando flujo normal de restaurantes...");
-
-  // Buscar vínculos activos del usuario en usuario_restaurantes
-  let usuario = await db.query.usuarios.findFirst({
-    where: eq(usuarios.auth_id, user.id),
-  });
-
-  if (!usuario && user.email) {
-    try {
-      const [nuevo] = await db
-        .insert(usuarios)
-        .values({
-          auth_id: user.id,
-          email: user.email,
-          nombre: user.user_metadata?.nombre || user.email.split("@")[0],
-          activo: true,
-        })
-        .onConflictDoUpdate({
-          target: usuarios.auth_id,
-          set: { email: user.email, activo: true },
-        })
-        .returning();
-      usuario = nuevo;
-    } catch {
-      usuario = await db.query.usuarios.findFirst({
-        where: eq(usuarios.auth_id, user.id),
-      });
-    }
-  }
-
-  if (!usuario) return { error: "Usuario no registrado en el sistema" };
-
-  const vinculos = await db
-    .select({
-      restaurante_id: usuarioRestaurantes.restaurante_id,
-      rol: usuarioRestaurantes.rol,
-      nombre: restaurantes.nombre,
-    })
-    .from(usuarioRestaurantes)
-    .innerJoin(restaurantes, eq(restaurantes.id, usuarioRestaurantes.restaurante_id))
-    .where(
-      and(
-        eq(usuarioRestaurantes.usuario_id, usuario.id),
-        eq(usuarioRestaurantes.activo, true)
-      )
-    );
-
-  if (vinculos.length === 0) {
-    return { error: "Tu usuario no tiene restaurantes asignados aún. Contacta a soporte o al administrador." };
-  }
-
-  const cookieStore = await cookies();
-
-  if (vinculos.length === 1) {
-    // Un solo restaurante — guardar directamente y redirigir al dashboard
-    cookieStore.set("restaurante_activo", vinculos[0].restaurante_id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+    // Buscar vínculos activos del usuario en usuario_restaurantes
+    let usuario = await db.query.usuarios.findFirst({
+      where: eq(usuarios.auth_id, user.id),
     });
-    return { redirectUrl: "/dashboard" };
-  }
 
-  // Más de un restaurante — redirigir al selector
-  return { redirectUrl: "/seleccionar-restaurante" };
+    if (!usuario && user.email) {
+      try {
+        const [nuevo] = await db
+          .insert(usuarios)
+          .values({
+            auth_id: user.id,
+            email: user.email,
+            nombre: user.user_metadata?.nombre || user.email.split("@")[0],
+            activo: true,
+          })
+          .onConflictDoUpdate({
+            target: usuarios.auth_id,
+            set: { email: user.email, activo: true },
+          })
+          .returning();
+        usuario = nuevo;
+      } catch {
+        usuario = await db.query.usuarios.findFirst({
+          where: eq(usuarios.auth_id, user.id),
+        });
+      }
+    }
+
+    if (!usuario) return { error: "Usuario no registrado en el sistema" };
+
+    const vinculos = await db
+      .select({
+        restaurante_id: usuarioRestaurantes.restaurante_id,
+        rol: usuarioRestaurantes.rol,
+        nombre: restaurantes.nombre,
+      })
+      .from(usuarioRestaurantes)
+      .innerJoin(restaurantes, eq(restaurantes.id, usuarioRestaurantes.restaurante_id))
+      .where(
+        and(
+          eq(usuarioRestaurantes.usuario_id, usuario.id),
+          eq(usuarioRestaurantes.activo, true)
+        )
+      );
+
+    if (vinculos.length === 0) {
+      return { error: "Tu usuario no tiene restaurantes asignados aún. Contacta a soporte o al administrador." };
+    }
+
+    const cookieStore = await cookies();
+
+    if (vinculos.length === 1) {
+      // Un solo restaurante — guardar directamente y redirigir al dashboard
+      cookieStore.set("restaurante_activo", vinculos[0].restaurante_id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
+      return { redirectUrl: "/dashboard" };
+    }
+
+    // Más de un restaurante — redirigir al selector
+    return { redirectUrl: "/seleccionar-restaurante" };
+  } catch (err: any) {
+    // Re-lanzar errores internos de Next.js (NEXT_REDIRECT, NEXT_NOT_FOUND)
+    // para que el framework los maneje correctamente.
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT") || err?.digest?.startsWith?.("NEXT_NOT_FOUND")) {
+      throw err;
+    }
+    console.error("[LOGIN ERROR]:", err);
+    return { error: "Ocurrió un error inesperado al iniciar sesión. Intenta de nuevo." };
+  }
 }
 
 export async function logoutAction() {
