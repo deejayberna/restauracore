@@ -62,9 +62,11 @@ export async function loginAction(
 
   if (!user) return { error: "No se pudo obtener el usuario" };
 
-  // 1. ANTES de revisar usuario_restaurantes: Si el usuario es Super-Admin, redirigir directo a /superadmin
-  const emailVerificar = user.email || data.email;
-  if (isSuperAdminEmail(emailVerificar)) {
+  // ── Super-Admin: bypass completo ──
+  // Verificamos ambas fuentes de email (Supabase y formulario) para
+  // robustez. Un super admin no necesita registro en `usuarios` ni
+  // vínculos en `usuario_restaurantes`.
+  if (isSuperAdminEmail(user.email) || isSuperAdminEmail(data.email)) {
     return { redirectUrl: "/superadmin" };
   }
 
@@ -114,9 +116,6 @@ export async function loginAction(
     );
 
   if (vinculos.length === 0) {
-    if (isSuperAdminEmail(emailVerificar)) {
-      return { redirectUrl: "/superadmin" };
-    }
     return { error: "Tu usuario no tiene restaurantes asignados aún. Contacta a soporte o al administrador." };
   }
 

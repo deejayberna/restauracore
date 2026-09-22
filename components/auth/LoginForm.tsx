@@ -41,8 +41,15 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         return;
       }
     } catch (err: any) {
+      // Extraer mensaje legible; un error de Server Action puede llegar como
+      // string con payload RSC embebido si el boundary falla.
+      const raw = typeof err?.message === "string" ? err.message : "";
+      const isPayloadLeak =
+        raw.length > 200 || raw.includes("$@") || raw.includes("\\n");
       setErrorMessage(
-        err?.message || "Ocurrió un error al procesar el inicio de sesión."
+        isPayloadLeak
+          ? "Ocurrió un error inesperado al procesar el inicio de sesión. Intenta de nuevo."
+          : raw || "Ocurrió un error al procesar el inicio de sesión."
       );
       setIsSubmitting(false);
     }
@@ -92,6 +99,18 @@ export function LoginForm({ initialError }: { initialError?: string }) {
                 Sesión Finalizada
               </strong>
               <span>Tu sesión anterior ha expirado. Por favor ingresa nuevamente.</span>
+            </div>
+          </div>
+        )}
+
+        {initialError === "sin-permiso" && (
+          <div className="mb-5 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-3 animate-in fade-in duration-150">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-rose-300 font-semibold mb-0.5">
+                Permiso Denegado
+              </strong>
+              <span>No tienes permisos para acceder a esa sección. Contacta a tu administrador.</span>
             </div>
           </div>
         )}

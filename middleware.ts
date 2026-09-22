@@ -93,6 +93,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  // ── Super-Admin bypass: puede inspeccionar cualquier sección ──
+  if (user.email && isSuperAdminEmail(user.email)) {
+    return response;
+  }
+
   const restauranteActivo = request.cookies.get("restaurante_activo")?.value;
 
   if (!restauranteActivo) {
