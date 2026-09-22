@@ -35,15 +35,36 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user || !user.email) {
+      console.warn("[SuperAdmin Guard] Rechazado: no-user o sin email", {
+        hasUser: !!user,
+        email: user?.email ?? "N/A",
+      });
       const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
       redirectRes.headers.set("x-superadmin-reject-reason", "no-user");
       return redirectRes;
     }
 
+    // ── Diagnóstico temporal: verificar qué ve el Edge Runtime ──
+    const superAdminList = getSuperAdminEmails();
+    const rawEnv = process.env.SUPER_ADMIN_EMAILS || "(vacía)";
+    const rawEnvPublic = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS || "(vacía)";
+    console.log("[SuperAdmin Guard] Diagnóstico Edge Runtime:", {
+      userEmail: user.email,
+      rawEnv,
+      rawEnvPublic,
+      parsedList: superAdminList,
+      parsedCount: superAdminList.length,
+      isMatch: isSuperAdminEmail(user.email),
+    });
+
     if (!isSuperAdminEmail(user.email)) {
+      console.warn("[SuperAdmin Guard] Rechazado: email-not-in-list", {
+        email: user.email,
+        list: superAdminList,
+      });
       const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
       redirectRes.headers.set("x-superadmin-reject-reason", "email-not-in-list");
-      redirectRes.headers.set("x-superadmin-count", String(getSuperAdminEmails().length));
+      redirectRes.headers.set("x-superadmin-count", String(superAdminList.length));
       return redirectRes;
     }
 
