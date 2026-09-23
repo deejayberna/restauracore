@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient } from "@/lib/supabase-middleware";
 import { checkRateLimitMenu } from "@/lib/rate-limiter";
-import { isSuperAdminEmail, getSuperAdminEmails } from "@/lib/superadmin-utils";
+import { isSuperAdminEmail } from "@/lib/superadmin-utils";
 
 const RUTAS_PROTEGIDAS: Record<string, string[]> = {
   "/dashboard": ["dueno"], // Fase 7: Dashboard multi-sucursal exclusivo del Dueño
@@ -44,27 +44,9 @@ export async function middleware(request: NextRequest) {
       return redirectRes;
     }
 
-    // ── Diagnóstico temporal: verificar qué ve el Edge Runtime ──
-    const superAdminList = getSuperAdminEmails();
-    const rawEnv = process.env.SUPER_ADMIN_EMAILS || "(vacía)";
-    const rawEnvPublic = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS || "(vacía)";
-    console.log("[SuperAdmin Guard] Diagnóstico Edge Runtime:", {
-      userEmail: user.email,
-      rawEnv,
-      rawEnvPublic,
-      parsedList: superAdminList,
-      parsedCount: superAdminList.length,
-      isMatch: isSuperAdminEmail(user.email),
-    });
-
     if (!isSuperAdminEmail(user.email)) {
-      console.warn("[SuperAdmin Guard] Rechazado: email-not-in-list", {
-        email: user.email,
-        list: superAdminList,
-      });
       const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
       redirectRes.headers.set("x-superadmin-reject-reason", "email-not-in-list");
-      redirectRes.headers.set("x-superadmin-count", String(superAdminList.length));
       return redirectRes;
     }
 
@@ -179,6 +161,3 @@ export const config = {
     "/superadmin/:path*",
   ],
 };
-
-
-
