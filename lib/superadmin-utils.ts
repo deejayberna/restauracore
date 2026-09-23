@@ -3,18 +3,13 @@
  * Compatible con Edge Runtime (middleware.ts), Server Actions y Node.js.
  *
  * SEGURIDAD:
- * - Lee de la variable de entorno SUPER_ADMIN_EMAILS (server-side).
- * - Fallback a NEXT_PUBLIC_SUPER_ADMIN_EMAILS para compatibilidad con
- *   Edge Middleware bundling en Vercel (donde env vars sin prefijo
- *   NEXT_PUBLIC_ pueden no estar inlineadas en el bundle de Edge).
- * - NUNCA hardcodear correos directamente en el código fuente.
+ * - Lee EXCLUSIVAMENTE de SUPER_ADMIN_EMAILS (variable de entorno server-side).
+ * - Si la variable no existe o está vacía, retorna lista vacía → acceso denegado.
+ * - Sin fallbacks, sin valores por defecto, sin correos en el código.
  */
 
 export function getSuperAdminEmails(): string[] {
-  const rawSuperAdmins =
-    process.env.SUPER_ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ||
-    "";
+  const rawSuperAdmins = process.env.SUPER_ADMIN_EMAILS ?? "";
 
   return rawSuperAdmins
     .split(",")

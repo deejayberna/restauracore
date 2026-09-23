@@ -35,10 +35,6 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!user || !user.email) {
-      console.warn("[SuperAdmin Guard] Rechazado: no-user o sin email", {
-        hasUser: !!user,
-        email: user?.email ?? "N/A",
-      });
       const redirectRes = NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
       redirectRes.headers.set("x-superadmin-reject-reason", "no-user");
       return redirectRes;
