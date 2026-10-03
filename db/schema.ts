@@ -16,7 +16,18 @@ import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 export const planEnum = pgEnum("plan", ["basico", "pro", "enterprise"]);
-export const rolEnum = pgEnum("rol", ["mesero", "cajero", "chef", "gerente", "dueno"]);
+export const rolEnum = pgEnum("rol", [
+  "mesero",
+  "cajero",
+  "chef",
+  "gerente",
+  "dueno",
+  "anfitrion",
+  "food_runner",
+  "supervisor_piso",
+  "bartender",
+]);
+export const estacionEnum = pgEnum("estacion", ["cocina", "bar"]);
 export const cuentaEstadoEnum = pgEnum("cuenta_estado", [
   "abierta",
   "cuenta_solicitada",
@@ -132,6 +143,7 @@ export const platillos = pgTable("platillos", {
   foto_url: text("foto_url"),
   disponible: boolean("disponible").notNull().default(true),
   tiempo_prep_minutos: integer("tiempo_prep_minutos"),
+  estacion: estacionEnum("estacion").notNull().default("cocina"),
 });
 
 export const ingredientes = pgTable("ingredientes", {
@@ -169,6 +181,8 @@ export const mesas = pgTable("mesas", {
     .references(() => restaurantes.id),
   numero: integer("numero").notNull(),
   qr_token: text("qr_token").notNull().unique(),
+  mesero_actual_id: uuid("mesero_actual_id").references(() => usuarios.id),
+  asignado_en: timestamp("asignado_en"),
 });
 
 export const ordenes = pgTable("ordenes", {
@@ -640,6 +654,19 @@ export const ticketsSoporteRelations = relations(ticketsSoporte, ({ one }) => ({
     fields: [ticketsSoporte.respondido_por],
     references: [usuarios.id],
   }),
+}));
+
+export const mesasRelations = relations(mesas, ({ one, many }) => ({
+  restaurante: one(restaurantes, {
+    fields: [mesas.restaurante_id],
+    references: [restaurantes.id],
+  }),
+  meseroActual: one(usuarios, {
+    fields: [mesas.mesero_actual_id],
+    references: [usuarios.id],
+  }),
+  ordenes: many(ordenes),
+  asignaciones: many(asignacionesMesa),
 }));
 
 // ─── Tipos inferidos ─────────────────────────────────────────────────────────

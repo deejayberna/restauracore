@@ -21,12 +21,15 @@ import { activarRestaurantePorSesion, registrarRestauranteDirectoAction } from "
 // Mock de Stripe Client y Supabase Admin
 const mockCheckoutSessionsRetrieve = vi.fn();
 const mockWebhooksConstructEvent = vi.fn();
+const mockAuthResend = vi.fn().mockResolvedValue({ data: { user: null, session: null }, error: null });
+const mockAuthAdminDeleteUser = vi.fn().mockResolvedValue({ error: null });
 
 vi.mock("@/lib/supabase-server", () => ({
   createSupabaseServerClient: vi.fn(async () => ({
     auth: {
       signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
       getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      resend: vi.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
     },
   })),
 }));
@@ -52,6 +55,7 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/supabase-admin", () => ({
   createSupabaseAdminClient: vi.fn(() => ({
     auth: {
+      resend: mockAuthResend,
       admin: {
         createUser: vi.fn(async ({ email, user_metadata }: any) => ({
           data: {
@@ -67,6 +71,8 @@ vi.mock("@/lib/supabase-admin", () => ({
           data: { users: [] },
           error: null,
         })),
+        updateUserById: vi.fn().mockResolvedValue({ error: null }),
+        deleteUser: mockAuthAdminDeleteUser,
       },
     },
   })),
@@ -496,6 +502,35 @@ describe("Fase 11 — Membresías, Registro Self-Service y Webhooks Stripe", () 
       });
       expect(evaluacion.bloqueado).toBe(false);
       expect(evaluacion.esTrial).toBe(true);
+    });
+
+    it("registrarRestauranteDirectoAction: falla explícitamente y revierte si el envío del correo de confirmación arroja error", async () => {
+      mockAuthResend.mockResolvedValueOnce({
+        data: null,
+        error: { message: "Servicio de correo temporalmente no disponible" },
+      });
+
+      const emailFallo = `direct_fail_${Date.now()}@restauratest.com`;
+      const input = {
+        nombreRestaurante: "Restaurante Fallo Correo",
+        direccion: "Calle Error 404",
+        timezone: "America/Mexico_City",
+        nombreDueno: "Dueño Afectado",
+        email: emailFallo,
+        password: "PasswordSegura123!",
+        plan: "pro" as const,
+      };
+
+      const res = await registrarRestauranteDirectoAction(input);
+      expect(res.success).toBeFalsy();
+      expect(res.error).toContain("No se pudo enviar el correo de confirmación");
+      expect(mockAuthAdminDeleteUser).toHaveBeenCalled();
+
+      // Verificar que el restaurante NO se creó en la base de datos
+      const rest = await db.query.restaurantes.findFirst({
+        where: eq(restaurantes.nombre, "Restaurante Fallo Correo"),
+      });
+      expect(rest).toBeUndefined();
     });
 
     it("Webhook checkout.session.completed para restaurante existente activa suscripción de inmediato", async () => {

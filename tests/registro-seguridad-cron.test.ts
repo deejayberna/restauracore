@@ -30,6 +30,7 @@ vi.mock("@/lib/supabase-server", () => ({
 vi.mock("@/lib/supabase-admin", () => ({
   createSupabaseAdminClient: vi.fn(() => ({
     auth: {
+      resend: vi.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
       admin: {
         createUser: vi.fn(async ({ email, user_metadata }: any) => ({
           data: {
@@ -45,6 +46,7 @@ vi.mock("@/lib/supabase-admin", () => ({
           data: { users: [] },
           error: null,
         })),
+        deleteUser: vi.fn().mockResolvedValue({ error: null }),
       },
     },
   })),

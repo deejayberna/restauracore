@@ -9,7 +9,16 @@ import { cookies } from "next/headers";
 import { UnauthorizedError } from "@/lib/errors";
 import { z, validateOrThrow } from "@/lib/validation";
 
-export type RolTipo = "mesero" | "cajero" | "chef" | "gerente" | "dueno";
+export type RolTipo =
+  | "mesero"
+  | "cajero"
+  | "chef"
+  | "gerente"
+  | "dueno"
+  | "anfitrion"
+  | "food_runner"
+  | "supervisor_piso"
+  | "bartender";
 
 async function obtenerSesionYRolActivo() {
   const supabase = await createSupabaseServerClient();
@@ -84,7 +93,17 @@ export async function listarPersonalRestauranteAction() {
 const invitarPersonalSchema = z.object({
   nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
-  rol: z.enum(["mesero", "cajero", "chef", "gerente", "dueno"]),
+  rol: z.enum([
+    "mesero",
+    "cajero",
+    "chef",
+    "gerente",
+    "dueno",
+    "anfitrion",
+    "food_runner",
+    "supervisor_piso",
+    "bartender",
+  ]),
 });
 
 /**

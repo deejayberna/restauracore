@@ -12,18 +12,53 @@ import {
 import { eq, and } from "drizzle-orm";
 import { cookies } from "next/headers";
 import * as crypto from "crypto";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { UnauthorizedError } from "@/lib/errors";
 
 export type Rol = "mesero" | "cajero" | "chef" | "gerente" | "dueno";
 
-async function getRestauranteActivoId(): Promise<string> {
+async function validarAccesoDuenoWizard(): Promise<{ restId: string; usuarioId: string }> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new UnauthorizedError("Sesión no iniciada");
+  }
+
+  const usuario = await db.query.usuarios.findFirst({
+    where: eq(usuarios.auth_id, user.id),
+  });
+
+  if (!usuario) {
+    throw new UnauthorizedError("Usuario no registrado en el sistema");
+  }
+
   const cookieStore = await cookies();
   const restId = cookieStore.get("restaurante_activo")?.value;
-  if (!restId) throw new Error("No hay restaurante activo seleccionado en la sesión.");
-  return restId;
+
+  if (!restId) {
+    throw new UnauthorizedError("No hay restaurante activo seleccionado en la sesión");
+  }
+
+  const vinculo = await db.query.usuarioRestaurantes.findFirst({
+    where: and(
+      eq(usuarioRestaurantes.usuario_id, usuario.id),
+      eq(usuarioRestaurantes.restaurante_id, restId),
+      eq(usuarioRestaurantes.activo, true)
+    ),
+  });
+
+  if (!vinculo || vinculo.rol !== "dueno") {
+    throw new UnauthorizedError("No autorizado: solo el dueño puede configurar el restaurante");
+  }
+
+  return { restId, usuarioId: usuario.id };
 }
 
 export async function obtenerDatosWizardAction() {
-  const restId = await getRestauranteActivoId();
+  const { restId } = await validarAccesoDuenoWizard();
 
   const rest = await db.query.restaurantes.findFirst({
     where: eq(restaurantes.id, restId),
@@ -79,7 +114,7 @@ export async function guardarPaso1Action(
   timezone: string,
   emailAlertas?: string
 ) {
-  const restId = await getRestauranteActivoId();
+  const { restId } = await validarAccesoDuenoWizard();
   await db
     .update(restaurantes)
     .set({
@@ -98,7 +133,7 @@ export async function guardarPaso2MenuAction(
   platilloNombre?: string,
   precio?: number
 ) {
-  const restId = await getRestauranteActivoId();
+  const { restId } = await validarAccesoDuenoWizard();
 
   if (!categoriaNombre?.trim() || !platilloNombre?.trim() || !precio) {
     return { exito: true, omitido: true };
@@ -127,7 +162,7 @@ export async function guardarPaso2MenuAction(
 }
 
 export async function guardarPaso3MesaAction() {
-  const restId = await getRestauranteActivoId();
+  const { restId } = await validarAccesoDuenoWizard();
 
   // Si ya tiene mesa 1, retornarla
   const [existente] = await db
@@ -164,7 +199,7 @@ export async function guardarPaso4InvitarAction(
   nombre?: string,
   rol?: Rol
 ) {
-  const restId = await getRestauranteActivoId();
+  const { restId } = await validarAccesoDuenoWizard();
 
   if (!email?.trim() || !nombre?.trim() || !rol) {
     return { exito: true, omitido: true };

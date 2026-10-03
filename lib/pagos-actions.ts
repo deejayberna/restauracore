@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { logAuditoria, ordenes, pagos, turnos, usuarioRestaurantes, usuarios } from "@/db/schema";
+import { logAuditoria, mesas, ordenes, pagos, turnos, usuarioRestaurantes, usuarios } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { cookies } from "next/headers";
@@ -158,6 +158,17 @@ export async function registrarPagoParcialAction(
           })
           .where(eq(ordenes.id, orden.id));
 
+        // Auto-liberar mesa asignada para el próximo turno o comensales
+        if (orden.mesa_id) {
+          await tx
+            .update(mesas)
+            .set({
+              mesero_actual_id: null,
+              asignado_en: null,
+            })
+            .where(eq(mesas.id, orden.mesa_id));
+        }
+
         await tx.insert(logAuditoria).values({
           restaurante_id,
           usuario_id: usuario.id,
@@ -168,6 +179,8 @@ export async function registrarPagoParcialAction(
             total: orden.total,
             propina_total: propinaTotal.toFixed(2),
             metodo_cierre: metodoPago,
+            mesa_id: orden.mesa_id,
+            mesa_auto_liberada: true,
           },
         });
       } else {

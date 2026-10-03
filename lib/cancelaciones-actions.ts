@@ -121,6 +121,27 @@ export async function cancelarItemAction(input: {
         })
         .where(eq(ordenes.id, orden.id));
 
+      // Si todos los items de la orden quedaron cancelados, transicionar orden y auto-liberar mesa
+      const itemsDeOrden = await tx.query.ordenItems.findMany({
+        where: eq(ordenItems.orden_id, orden.id),
+      });
+      const tieneActivos = itemsDeOrden.some(
+        (it) => it.id !== item.id && it.estado !== "cancelado"
+      );
+      if (!tieneActivos) {
+        await tx
+          .update(ordenes)
+          .set({ estado: "cancelado", actualizado_en: new Date() })
+          .where(eq(ordenes.id, orden.id));
+
+        if (orden.mesa_id) {
+          await tx
+            .update(mesas)
+            .set({ mesero_actual_id: null, asignado_en: null })
+            .where(eq(mesas.id, orden.mesa_id));
+        }
+      }
+
       await tx.insert(logAuditoria).values({
         restaurante_id,
         usuario_id: usuario.id,
@@ -341,7 +362,28 @@ export async function aprobarCancelacionItemAction(input: {
         });
       }
 
-      // 5. Asentar en log_auditoria
+      // 5. Si todos los items de la orden quedaron cancelados, marcar orden cancelada y auto-liberar mesa
+      const itemsDeOrden = await tx.query.ordenItems.findMany({
+        where: eq(ordenItems.orden_id, orden.id),
+      });
+      const tieneActivos = itemsDeOrden.some(
+        (it) => it.id !== item.id && it.estado !== "cancelado"
+      );
+      if (!tieneActivos) {
+        await tx
+          .update(ordenes)
+          .set({ estado: "cancelado", actualizado_en: new Date() })
+          .where(eq(ordenes.id, orden.id));
+
+        if (orden.mesa_id) {
+          await tx
+            .update(mesas)
+            .set({ mesero_actual_id: null, asignado_en: null })
+            .where(eq(mesas.id, orden.mesa_id));
+        }
+      }
+
+      // 6. Asentar en log_auditoria
       await tx.insert(logAuditoria).values({
         restaurante_id,
         usuario_id: usuario.id,
@@ -500,6 +542,92 @@ export async function editarItemPendienteAction(input: {
       registro_id: item.id,
       valores_anteriores: { cantidad: item.cantidad, notas: item.notas },
       valores_nuevos: { cantidad: nuevaCantidad, notas: input.notas ?? item.notas },
+    });
+  });
+
+  return { ok: true };
+}
+
+/**
+ * ACCIÓN: Cancelar una orden completa y liberar automáticamente la mesa asociada.
+ * Exclusivo para 'supervisor_piso', 'gerente', 'dueno'.
+ */
+export async function cancelarOrdenAction(input: {
+  ordenId: string;
+  motivo: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!input.motivo || input.motivo.trim().length < 3) {
+    return { ok: false, error: "El motivo de cancelación debe tener al menos 3 caracteres." };
+  }
+
+  const { usuario, vinculo, restaurante_id } = await obtenerUsuarioYRol();
+
+  const ROLES_CANCELAR_ORDEN = ["supervisor_piso", "gerente", "dueno"];
+  if (!ROLES_CANCELAR_ORDEN.includes(vinculo.rol)) {
+    throw new UnauthorizedError(
+      `Solo supervisor de piso, gerente o dueño pueden cancelar una orden completa. Rol '${vinculo.rol}' no autorizado.`
+    );
+  }
+
+  const orden = await db.query.ordenes.findFirst({
+    where: and(eq(ordenes.id, input.ordenId), eq(ordenes.restaurante_id, restaurante_id)),
+  });
+
+  if (!orden) {
+    return { ok: false, error: "Orden no encontrada en este restaurante." };
+  }
+
+  if (orden.estado === "pagado") {
+    return { ok: false, error: "No es posible cancelar una orden ya pagada." };
+  }
+
+  if (orden.estado === "cancelado") {
+    return { ok: true, error: "La orden ya se encuentra cancelada." };
+  }
+
+  await db.transaction(async (tx) => {
+    // 1. Cancelar todos los items no cancelados
+    await tx
+      .update(ordenItems)
+      .set({ estado: "cancelado" })
+      .where(and(eq(ordenItems.orden_id, orden.id), sql`${ordenItems.estado} != 'cancelado'`));
+
+    // 2. Marcar orden como cancelada
+    await tx
+      .update(ordenes)
+      .set({
+        estado: "cancelado",
+        actualizado_en: new Date(),
+      })
+      .where(eq(ordenes.id, orden.id));
+
+    // 3. Auto-liberar mesa
+    if (orden.mesa_id) {
+      await tx
+        .update(mesas)
+        .set({
+          mesero_actual_id: null,
+          asignado_en: null,
+        })
+        .where(eq(mesas.id, orden.mesa_id));
+    }
+
+    // 4. Auditoría
+    await tx.insert(logAuditoria).values({
+      restaurante_id,
+      usuario_id: usuario.id,
+      accion: "CANCELACION_ORDEN_COMPLETA",
+      tabla_afectada: "ordenes",
+      registro_id: orden.id,
+      valores_anteriores: { estado: orden.estado, total: orden.total },
+      valores_nuevos: {
+        estado: "cancelado",
+        motivo: input.motivo.trim(),
+        cancelado_por: usuario.id,
+        rol: vinculo.rol,
+        mesa_id: orden.mesa_id,
+        mesa_auto_liberada: true,
+      },
     });
   });
 

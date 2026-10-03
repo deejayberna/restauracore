@@ -12,7 +12,6 @@ import type { Plan } from "@/lib/planes";
 import { eq } from "drizzle-orm";
 import { getStripeClient, STRIPE_PRICES } from "@/lib/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { z } from "zod";
 import * as crypto from "crypto";
 import { checkRateLimitRegistro } from "@/lib/rate-limiter";
@@ -110,7 +109,24 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
     authUserId = authUserRes.data.user.id;
   }
 
-  // 3. 14 días exactos de prueba gratuita
+  // 3. Enviar correo de confirmación de cuenta vía Supabase Auth
+  const { error: resendError } = await supabaseAdmin.auth.resend({
+    type: "signup",
+    email: cleanEmail,
+    options: {
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?confirmado=true`,
+    },
+  });
+
+  if (resendError) {
+    console.error("[RegistroDirecto] Error crítico al solicitar envío de correo de confirmación:", resendError);
+    await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    return {
+      error: `No se pudo enviar el correo de confirmación: ${resendError.message}. Por favor verifica tu correo o intenta de nuevo más tarde.`,
+    };
+  }
+
+  // 4. 14 días exactos de prueba gratuita
   const fechaFinTrial = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
   let nuevoRestauranteId = "";
   let nuevoUsuarioId = "";
@@ -177,20 +193,6 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
       });
     });
 
-    // 4. Enviar correo de confirmación de cuenta vía Supabase Auth
-    try {
-      const supabaseServer = await createSupabaseServerClient();
-      await supabaseServer.auth.resend({
-        type: "signup",
-        email: cleanEmail,
-        options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?confirmado=true`,
-        },
-      });
-    } catch (authErr) {
-      console.warn("[RegistroDirecto] Advertencia al solicitar envío de correo de confirmación:", authErr);
-    }
-
     return {
       success: true,
       requiereConfirmacion: true,
@@ -203,6 +205,7 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
     };
   } catch (err: any) {
     console.error("[RegistroDirecto] Error transaccional en PostgreSQL:", err);
+    await supabaseAdmin.auth.admin.deleteUser(authUserId);
     return { error: err.message || "Error al completar el registro del restaurante." };
   }
 }

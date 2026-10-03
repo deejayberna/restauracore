@@ -21,7 +21,8 @@ const webhookSchema = z.object({
 export async function POST(request: NextRequest) {
   // Verificar secret del webhook para evitar llamadas no autorizadas
   const secret = request.headers.get("x-webhook-secret");
-  if (secret !== process.env.WEBHOOK_SECRET) {
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+  if (!webhookSecret || secret !== webhookSecret) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

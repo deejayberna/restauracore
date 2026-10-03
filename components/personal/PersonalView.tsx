@@ -91,15 +91,23 @@ export function PersonalView({
   const opcionesRol = esDueno
     ? [
         { value: "mesero", label: "Mesero" },
-        { value: "cajero", label: "Cajero" },
+        { value: "supervisor_piso", label: "Supervisor de Piso" },
+        { value: "anfitrion", label: "Anfitrión / Hostess" },
+        { value: "food_runner", label: "Food Runner" },
+        { value: "bartender", label: "Bartender / Bar" },
         { value: "chef", label: "Chef / Cocina" },
+        { value: "cajero", label: "Cajero" },
         { value: "gerente", label: "Gerente" },
         { value: "dueno", label: "Dueño" },
       ]
     : [
         { value: "mesero", label: "Mesero" },
-        { value: "cajero", label: "Cajero" },
+        { value: "supervisor_piso", label: "Supervisor de Piso" },
+        { value: "anfitrion", label: "Anfitrión / Hostess" },
+        { value: "food_runner", label: "Food Runner" },
+        { value: "bartender", label: "Bartender / Bar" },
         { value: "chef", label: "Chef / Cocina" },
+        { value: "cajero", label: "Cajero" },
       ];
 
   const roleColors: Record<RolTipo, "info" | "warning" | "success" | "neutral" | "danger"> = {
@@ -108,6 +116,10 @@ export function PersonalView({
     chef: "danger",
     cajero: "success",
     mesero: "neutral",
+    supervisor_piso: "info",
+    anfitrion: "neutral",
+    food_runner: "warning",
+    bartender: "success",
   };
 
   async function handleInvitar(e: React.FormEvent) {

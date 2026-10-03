@@ -6,19 +6,20 @@ import { actualizarEstadoItem } from "@/lib/cocina-actions";
 import { descontarInventarioPorOrden } from "@/lib/inventario-actions";
 import type { ItemKDS, EstadoKDS } from "@/lib/kds-queries";
 
-const COLUMNAS: { estado: EstadoKDS; label: string; color: string; siguiente?: EstadoKDS; accion?: string; btnColor: string }[] = [
+const COLUMNAS: { estado: EstadoKDS; label: string; color: string; siguiente?: EstadoKDS | "entregado"; accion?: string; btnColor: string }[] = [
   { estado: "pendiente",      label: "🔴 Pendiente",          color: "#fff3f3", siguiente: "en_preparacion", accion: "▶ Iniciar",  btnColor: "#e74c3c" },
   { estado: "en_preparacion", label: "🟡 En Preparación",     color: "#fffbf0", siguiente: "listo",          accion: "✓ Listo",    btnColor: "#f39c12" },
-  { estado: "listo",          label: "🟢 Listo para entregar", color: "#f0fff4", btnColor: "#27ae60" },
+  { estado: "listo",          label: "🟢 Listo para entregar", color: "#f0fff4", siguiente: "entregado",      accion: "🚀 Servir", btnColor: "#27ae60" },
 ];
 
 interface Props {
   itemsIniciales: ItemKDS[];
   restaurante_id: string;
   restauranteNombre?: string;
+  estacion?: "cocina" | "bar";
 }
 
-export function TableroKDS({ itemsIniciales, restaurante_id, restauranteNombre }: Props) {
+export function TableroKDS({ itemsIniciales, restaurante_id, restauranteNombre, estacion }: Props) {
   const [items, setItems] = useState<ItemKDS[]>(itemsIniciales);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -124,14 +125,18 @@ export function TableroKDS({ itemsIniciales, restaurante_id, restauranteNombre }
   }
 
 
-  function moverItem(item_id: string, nuevoEstado: EstadoKDS) {
-    setItems((prev) =>
-      prev.map((i) => (i.id === item_id ? { ...i, estado: nuevoEstado } : i))
-    );
+  function moverItem(item_id: string, nuevoEstado: EstadoKDS | "entregado") {
+    if (nuevoEstado === "entregado") {
+      setItems((prev) => prev.filter((i) => i.id !== item_id));
+    } else {
+      setItems((prev) =>
+        prev.map((i) => (i.id === item_id ? { ...i, estado: nuevoEstado } : i))
+      );
+    }
     startTransition(async () => {
       const fd = new FormData();
       fd.set("item_id", item_id);
-      let result: { error: string } | null = null;
+      let result: { error?: string } | null = null;
       if (nuevoEstado === "listo") {
         result = await descontarInventarioPorOrden(null, fd);
       } else {
@@ -140,13 +145,13 @@ export function TableroKDS({ itemsIniciales, restaurante_id, restauranteNombre }
       }
       if (result?.error) {
         setError(result.error);
-        setItems((prev) =>
-          prev.map((i) =>
-            i.id === item_id
-              ? { ...i, estado: nuevoEstado === "listo" ? "en_preparacion" : "pendiente" }
-              : i
-          )
-        );
+        if (nuevoEstado === "listo") {
+          setItems((prev) =>
+            prev.map((i) =>
+              i.id === item_id ? { ...i, estado: "en_preparacion" } : i
+            )
+          );
+        }
       } else {
         setError(null);
       }
@@ -162,26 +167,34 @@ export function TableroKDS({ itemsIniciales, restaurante_id, restauranteNombre }
           fetch(`/api/kds/item/${payload.new.id}`)
             .then((r) => r.json())
             .then((item: ItemKDS) => {
-              if (item)
+              if (item) {
+                if (estacion && item.estacion && item.estacion !== estacion) {
+                  return; // Ignorar items de otra estación
+                }
                 setItems((prev) => {
                   if (prev.find((i) => i.id === item.id)) return prev;
                   return [...prev, item];
                 });
+              }
             })
             .catch(() => {});
         } else if (payload.eventType === "UPDATE") {
-          setItems((prev) =>
-            prev.map((i) =>
-              i.id === payload.new.id ? { ...i, estado: payload.new.estado as EstadoKDS } : i
-            )
-          );
+          if (payload.new.estado === "entregado" || payload.new.estado === "cancelado") {
+            setItems((prev) => prev.filter((i) => i.id !== payload.new.id));
+          } else {
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === payload.new.id ? { ...i, estado: payload.new.estado as EstadoKDS } : i
+              )
+            );
+          }
         } else if (payload.eventType === "DELETE") {
           setItems((prev) => prev.filter((i) => i.id !== payload.old.id));
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [restaurante_id]);
+  }, [restaurante_id, estacion]);
 
   return (
     <>

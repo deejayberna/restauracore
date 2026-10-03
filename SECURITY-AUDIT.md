@@ -78,3 +78,24 @@ Todas las tablas operativas cuentan con `ROW LEVEL SECURITY` habilitado y polít
 3. **Control de Turno por `responsable_id`:** [capturarConteoFisicoAction](file:///d:/RestauranInver/restauracore/lib/caja-actions.ts) rechaza intentos de meseros o cajeros de capturar arqueos de turnos asignados a otros responsables, registrando auditoría inmediata.
 4. **Patrón Anti-Silencio:** Toda falla de entrega en notificaciones críticas (discrepancias de caja, sospecha de robo en mermas, cancelaciones) asienta un registro obligatorio en `log_auditoria` antes de continuar.
 
+---
+
+## 5. Bitácora de Migraciones DDL y Protocolo de Entornos
+
+### 5.1 Registro de Migración 0008 (Roles, Dual KDS y Mesas Exclusivas)
+- **Fecha:** 02 de Octubre de 2026 (16:23:05 -06:00 / 22:23:57Z)
+- **Script:** `scripts/apply_migration_0008_roles_barra_mesas.ts`
+- **Operaciones:** 
+  - `ALTER TYPE "rol" ADD VALUE IF NOT EXISTS` ('anfitrion', 'food_runner', 'supervisor_piso', 'bartender').
+  - `CREATE TYPE "estacion" AS ENUM ('cocina', 'bar')`.
+  - `ALTER TABLE "platillos" ADD COLUMN IF NOT EXISTS "estacion" estacion DEFAULT 'cocina'`.
+  - `ALTER TABLE "mesas" ADD COLUMN IF NOT EXISTS "mesero_actual_id" uuid, ADD COLUMN IF NOT EXISTS "asignado_en" timestamptz`.
+- **Registro de Excepción:** El script ejecutó las sentencias simultáneamente contra Desarrollo (`.env.local`) y Producción (`.env.production.local`) de forma previa a la ejecución de la suite de pruebas completa. Aunque las sentencias fueron estrictamente aditivas e idempotentes (sin romper servicios en curso), esto constituyó una excepción al flujo regular.
+
+### 5.2 Protocolo Obligatorio para Migraciones a Producción
+A partir de la presente auditoría:
+1. Ningún script de migración ejecutará sentencias contra Producción de forma conjunta o automatizada.
+2. Toda migración debe ejecutarse y validarse primero en Desarrollo (`.env.local`), verificando la suite de pruebas completa (`npx vitest run`) y la compilación (`npm run build`).
+3. **Autorización Requerida:** La ejecución contra `.env.production.local` requerirá confirmación y visto bueno explícito del usuario antes de ser disparada.
+
+

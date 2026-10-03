@@ -18,17 +18,22 @@ import {
   XCircle,
   Clock,
   BookOpen,
+  Wine,
+  Sparkles,
 } from "lucide-react";
 import { db } from "@/db";
 import {
   mesas,
   ordenes,
   ordenItems,
+  platillos,
   turnos,
   solicitudesCancelacionItem,
   asignacionesMesa,
 } from "@/db/schema";
 import { eq, and, sql, desc, count } from "drizzle-orm";
+import { PanelMesasOperativas } from "@/components/mesas/PanelMesasOperativas";
+import { obtenerMesasOperativasAction } from "@/lib/mesas-actions";
 
 export default async function HomePage() {
   const { user, currentBranchId } = await getProtectedLayoutData();
@@ -36,32 +41,71 @@ export default async function HomePage() {
 
   // ─── CONSULTAS SEGÚN ROL ───────────────────────────────────────────────────
 
-  // Datos para Mesero
-  let mesasAsignadasHoy = 0;
-  let ordenesActivasMesero = 0;
-  if (user.rol === "mesero") {
-    const asignaciones = await db
-      .select({ count: count() })
-      .from(asignacionesMesa)
-      .where(
-        and(
-          eq(asignacionesMesa.restaurante_id, currentBranchId),
-          eq(asignacionesMesa.mesero_id, user.id),
-          eq(asignacionesMesa.fecha, fechaHoy)
-        )
-      );
-    mesasAsignadasHoy = asignaciones[0]?.count ?? 0;
+  // Datos para Mesero y Supervisor de Piso (Mesas Operativas Exclusivas)
+  let mesasOperativasData: any = null;
+  if (["mesero", "supervisor_piso"].includes(user.rol)) {
+    try {
+      mesasOperativasData = await obtenerMesasOperativasAction();
+    } catch (e) {
+      console.error("Error al obtener mesas operativas:", e);
+    }
+  }
 
-    const ordenesActivas = await db
-      .select({ count: count() })
-      .from(ordenes)
+  // Datos para Bartender
+  let itemsEnBarra = 0;
+  let itemsListosBarra = 0;
+  if (user.rol === "bartender" || user.rol === "gerente" || user.rol === "dueno") {
+    const countsBarra = await db
+      .select({
+        estado: ordenItems.estado,
+        total: count(),
+      })
+      .from(ordenItems)
+      .innerJoin(ordenes, eq(ordenes.id, ordenItems.orden_id))
+      .innerJoin(platillos, eq(platillos.id, ordenItems.platillo_id))
       .where(
         and(
           eq(ordenes.restaurante_id, currentBranchId),
-          eq(ordenes.estado, "abierta")
+          eq(platillos.estacion, "bar"),
+          sql`${ordenItems.estado} IN ('pendiente', 'en_preparacion', 'listo')`
+        )
+      )
+      .groupBy(ordenItems.estado);
+
+    for (const c of countsBarra) {
+      if (c.estado === "en_preparacion" || c.estado === "pendiente") {
+        itemsEnBarra += Number(c.total);
+      } else if (c.estado === "listo") {
+        itemsListosBarra += Number(c.total);
+      }
+    }
+  }
+
+  // Datos para Food Runner
+  let itemsListosParaEntregar = 0;
+  if (user.rol === "food_runner") {
+    const [c] = await db
+      .select({ total: count() })
+      .from(ordenItems)
+      .innerJoin(ordenes, eq(ordenes.id, ordenItems.orden_id))
+      .where(
+        and(
+          eq(ordenes.restaurante_id, currentBranchId),
+          eq(ordenItems.estado, "listo")
         )
       );
-    ordenesActivasMesero = ordenesActivas[0]?.count ?? 0;
+    itemsListosParaEntregar = Number(c?.total ?? 0);
+  }
+
+  // Datos para Anfitrión
+  let conteoMesasTotal = 0;
+  let conteoMesasOcupadas = 0;
+  if (user.rol === "anfitrion") {
+    const mesasRest = await db.query.mesas.findMany({
+      where: eq(mesas.restaurante_id, currentBranchId),
+    });
+    conteoMesasTotal = mesasRest.length;
+    conteoMesasOcupadas = mesasRest.filter((m) => m.mesero_actual_id !== null).length;
   }
 
   // Datos para Cajero
@@ -157,29 +201,34 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* ─── VISTA PARA MESERO ──────────────────────────────────────────────── */}
-      {user.rol === "mesero" && (
+      {/* ─── VISTA PARA MESERO Y SUPERVISOR DE PISO (MESAS EXCLUSIVAS) ──────── */}
+      {["mesero", "supervisor_piso"].includes(user.rol) && mesasOperativasData && (
+        <PanelMesasOperativas
+          usuarioActual={mesasOperativasData.usuario_actual}
+          mesasIniciales={mesasOperativasData.mesas}
+          meserosDisponibles={mesasOperativasData.meseros_disponibles}
+        />
+      )}
+
+      {/* ─── VISTA PARA BARTENDER ───────────────────────────────────────────── */}
+      {user.rol === "bartender" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
-                <UtensilsCrossed className="w-4 h-4 text-sky-600" />
-                Mis Mesas Asignadas Hoy
+                <Wine className="w-4 h-4 text-purple-600" />
+                Comandas en Barra
               </CardTitle>
-              <CardDescription>Mesas bajo tu atención en este turno</CardDescription>
+              <CardDescription>Bebidas y cocteles pendientes de preparación</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-black text-slate-900 dark:text-slate-100">
-                {mesasAsignadasHoy}
+              <div className="text-3xl font-black text-purple-600 dark:text-purple-400">
+                {itemsEnBarra}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {mesasAsignadasHoy > 0
-                  ? "Tienes mesas asignadas directamente para servicio."
-                  : "No tienes mesas fijas asignadas hoy; puedes atender cualquier mesa abierta."}
-              </p>
-              <Link href="/mesas" className="mt-4 block">
-                <Button size="sm" className="w-full">
-                  Ir al Plano de Mesas <ArrowRight className="w-4 h-4 ml-1" />
+              <p className="text-xs text-slate-500 mt-1">Tragos y bebidas en preparación actualmente.</p>
+              <Link href="/barra" className="mt-4 block">
+                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                  Abrir Monitor KDS Barra <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
             </CardContent>
@@ -189,20 +238,81 @@ export default async function HomePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-emerald-600" />
-                Cuentas Abiertas en Restaurante
+                Bebidas Listas para Servir
               </CardTitle>
-              <CardDescription>Mesas con comanda activa consumiendo</CardDescription>
+              <CardDescription>Esperando que el mesero o food runner las recoja</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                {itemsListosBarra}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Listas en barra para entrega a sala.</p>
+              <Link href="/barra" className="mt-4 block">
+                <Button variant="secondary" size="sm" className="w-full">
+                  Ver KDS Barra
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ─── VISTA PARA FOOD RUNNER ─────────────────────────────────────────── */}
+      {user.rol === "food_runner" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <UtensilsCrossed className="w-4 h-4 text-emerald-600" />
+                Platillos y Bebidas Listas para Entrega
+              </CardTitle>
+              <CardDescription>Esperando ser llevados a las mesas de los comensales</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                {itemsListosParaEntregar}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Órdenes listas en barra o cocina esperando a ser servidas.
+              </p>
+              <div className="flex gap-2 mt-4">
+                <Link href="/cocina" className="flex-1">
+                  <Button size="sm" className="w-full">
+                    KDS Cocina <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+                <Link href="/barra" className="flex-1">
+                  <Button variant="secondary" size="sm" className="w-full">
+                    KDS Barra <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ─── VISTA PARA ANFITRIÓN ───────────────────────────────────────────── */}
+      {user.rol === "anfitrion" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <UtensilsCrossed className="w-4 h-4 text-sky-600" />
+                Ocupación de Mesas en Sala
+              </CardTitle>
+              <CardDescription>Monitoreo de disponibilidad para asignación de comensales</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-black text-slate-900 dark:text-slate-100">
-                {ordenesActivasMesero}
+                {conteoMesasTotal - conteoMesasOcupadas} / {conteoMesasTotal}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Órdenes activas acumulando platillos en el piso.
+                {conteoMesasTotal - conteoMesasOcupadas} mesa(s) disponibles para sentar clientes.
               </p>
               <Link href="/mesas" className="mt-4 block">
-                <Button variant="secondary" size="sm" className="w-full">
-                  Tomar / Modificar Comanda
+                <Button size="sm" className="w-full">
+                  Ver Plano de Mesas <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
             </CardContent>
@@ -442,6 +552,12 @@ export default async function HomePage() {
                   <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-sky-500 dark:hover:border-sky-500 transition-colors flex flex-col items-center text-center gap-2">
                     <ChefHat className="w-5 h-5 text-rose-600" />
                     <span className="text-xs font-semibold">Cocina KDS</span>
+                  </div>
+                </Link>
+                <Link href="/barra">
+                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-colors flex flex-col items-center text-center gap-2">
+                    <Wine className="w-5 h-5 text-purple-600" />
+                    <span className="text-xs font-semibold">Barra KDS</span>
                   </div>
                 </Link>
                 <Link href="/inventario">

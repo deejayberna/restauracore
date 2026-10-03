@@ -24,6 +24,7 @@ import {
   Store,
   BookOpen,
   LifeBuoy,
+  Wine,
 } from "lucide-react";
 
 import { BranchSwitcher, type BranchInfo } from "./BranchSwitcher";
@@ -35,7 +36,16 @@ export interface NavUser {
   id: string;
   nombre: string;
   email: string;
-  rol: "mesero" | "cajero" | "chef" | "gerente" | "dueno";
+  rol:
+    | "mesero"
+    | "cajero"
+    | "chef"
+    | "gerente"
+    | "dueno"
+    | "anfitrion"
+    | "food_runner"
+    | "supervisor_piso"
+    | "bartender";
 }
 
 interface NavItem {
@@ -70,13 +80,23 @@ export function NavigationShell({
       label: "Inicio",
       href: "/home",
       icon: <Home className="w-5 h-5" />,
-      roles: ["mesero", "cajero", "chef", "gerente", "dueno"],
+      roles: [
+        "mesero",
+        "cajero",
+        "chef",
+        "gerente",
+        "dueno",
+        "anfitrion",
+        "food_runner",
+        "supervisor_piso",
+        "bartender",
+      ],
     },
     {
       label: "Mesas & Comandas",
       href: "/mesas",
       icon: <UtensilsCrossed className="w-5 h-5" />,
-      roles: ["mesero", "gerente", "dueno"],
+      roles: ["mesero", "supervisor_piso", "anfitrion", "gerente", "dueno"],
     },
     {
       label: "Administrar Menú",
@@ -88,19 +108,25 @@ export function NavigationShell({
       label: "Cocina KDS",
       href: "/cocina",
       icon: <ChefHat className="w-5 h-5" />,
-      roles: ["chef", "gerente", "dueno"],
+      roles: ["chef", "food_runner", "gerente", "dueno"],
+    },
+    {
+      label: "Barra KDS",
+      href: "/barra",
+      icon: <Wine className="w-5 h-5" />,
+      roles: ["bartender", "food_runner", "gerente", "dueno"],
     },
     {
       label: "Caja & Turnos",
       href: "/caja",
       icon: <DollarSign className="w-5 h-5" />,
-      roles: ["cajero", "mesero", "gerente", "dueno"],
+      roles: ["cajero", "mesero", "supervisor_piso", "gerente", "dueno"],
     },
     {
       label: "Propinas del Turno",
       href: "/caja/propinas",
       icon: <Coins className="w-5 h-5" />,
-      roles: ["cajero", "gerente", "dueno"],
+      roles: ["cajero", "mesero", "supervisor_piso", "gerente", "dueno"],
     },
     {
       label: "Aprobación Cancelaciones",
@@ -179,6 +205,10 @@ export function NavigationShell({
     chef: "danger",
     cajero: "success",
     mesero: "neutral",
+    supervisor_piso: "info",
+    anfitrion: "neutral",
+    food_runner: "warning",
+    bartender: "success",
   };
 
   return (

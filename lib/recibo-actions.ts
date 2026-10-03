@@ -45,9 +45,29 @@ export async function obtenerDatosReciboAction(ordenId: string): Promise<DatosRe
 
   if (!user) throw new UnauthorizedError("Sesión no iniciada");
 
+  const usuario = await db.query.usuarios.findFirst({
+    where: eq(usuarios.auth_id, user.id),
+  });
+
+  if (!usuario) {
+    throw new UnauthorizedError("Usuario no registrado en el sistema");
+  }
+
   const cookieStore = await cookies();
   const restaurante_id = cookieStore.get("restaurante_activo")?.value;
   if (!restaurante_id) throw new UnauthorizedError("Restaurante activo no seleccionado");
+
+  const vinculo = await db.query.usuarioRestaurantes.findFirst({
+    where: and(
+      eq(usuarioRestaurantes.usuario_id, usuario.id),
+      eq(usuarioRestaurantes.restaurante_id, restaurante_id),
+      eq(usuarioRestaurantes.activo, true)
+    ),
+  });
+
+  if (!vinculo) {
+    throw new UnauthorizedError("No tienes un vínculo activo con este restaurante");
+  }
 
   // Obtener orden
   const [orden] = await db

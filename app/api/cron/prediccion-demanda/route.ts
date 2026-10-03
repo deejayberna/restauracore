@@ -6,7 +6,8 @@ import { generarPrediccionDemanda } from "@/lib/ai/prediccionDemanda";
 export async function GET(request: NextRequest) {
   // Verificar que la llamada viene del cron de Vercel
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
