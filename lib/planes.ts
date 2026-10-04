@@ -24,7 +24,8 @@ export type Feature =
   | "ia_menu_engineering"
   | "dashboard_multisucursal"
   | "compras_proveedores"
-  | "auditoria_avanzada";
+  | "auditoria_avanzada"
+  | "telegram_recuperacion";
 
 export const PLAN_JERARQUIA: Record<Plan, number> = {
   basico: 1,
@@ -51,6 +52,7 @@ export const FEATURE_PLAN_MINIMO: Record<Feature, Plan> = {
   dashboard_multisucursal: "enterprise",
   compras_proveedores: "enterprise",
   auditoria_avanzada: "enterprise",
+  telegram_recuperacion: "enterprise",
 };
 
 /**
@@ -250,6 +252,7 @@ export const PLANES_DETALLE: Record<Plan, InfoPlan> = {
       "Dashboard multi-sucursal consolidado",
       "Módulo de compras, recepción y comparador de proveedores",
       "Pistas de auditoría forense inmutable",
+      "Recuperación y fidelización de comensales vía Telegram",
     ],
   },
 };

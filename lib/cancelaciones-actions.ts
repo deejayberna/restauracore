@@ -21,6 +21,7 @@ import { cookies } from "next/headers";
 import { UnauthorizedError, ValidationError, NotFoundError } from "@/lib/errors";
 import { enviarNotificacionSolicitudCancelacion } from "./notificaciones";
 import { obtenerDestinatariosRestaurante } from "./notificaciones-destinatarios";
+import { notificarPedidoCanceladoTelegram } from "./telegram-clientes";
 
 // Helper para obtener usuario autenticado y rol activo
 async function obtenerUsuarioYRol() {
@@ -630,6 +631,9 @@ export async function cancelarOrdenAction(input: {
       },
     });
   });
+
+  // Notificación transaccional al cliente si estaba vinculado en Telegram
+  notificarPedidoCanceladoTelegram(orden.id).catch(() => {});
 
   return { ok: true };
 }

@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { obtenerMetricasMultiSucursal } from "@/lib/dashboard-actions";
 import { GraficasDashboard } from "@/components/dashboard/GraficasDashboard";
+import { calcularValorProtegido } from "@/lib/roi-antifraude";
+import { WidgetControlAntiFraude } from "@/components/roi/WidgetControlAntiFraude";
 
 interface PropsPage {
   searchParams: Promise<{ restaurante?: string }>;
@@ -117,8 +119,19 @@ export default async function DashboardPage({ searchParams }: PropsPage) {
 
   const { restaurantes_disponibles, sucursales, consolidado } = resultado;
 
+  const datosAntiFraudePorSucursal = await Promise.all(
+    sucursales.map(async (s) => {
+      try {
+        return await calcularValorProtegido(s.restaurante.id);
+      } catch (e) {
+        console.error("Error al calcular valor protegido para sucursal:", s.restaurante.id, e);
+        return null;
+      }
+    })
+  );
+
   return (
-    <main style={{ padding: "2rem 3rem", maxWidth: "1400px", margin: "0 auto", fontFamily: "sans-serif" }}>
+    <main className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
       {/* Header Ejecutivo */}
       <header
         style={{
@@ -267,7 +280,7 @@ export default async function DashboardPage({ searchParams }: PropsPage) {
 
       {/* 3. Métricas por Restaurante (Segregadas estrictamente) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "3rem" }}>
-        {sucursales.map((sucursal) => (
+        {sucursales.map((sucursal, idx) => (
           <section
             key={sucursal.restaurante.id}
             style={{
@@ -310,6 +323,16 @@ export default async function DashboardPage({ searchParams }: PropsPage) {
                 Métricas Exclusivas
               </span>
             </div>
+
+            {/* Widget de Control Anti-Fraude Este Mes */}
+            {datosAntiFraudePorSucursal[idx] && (
+              <div style={{ marginBottom: "1.5rem" }}>
+                <WidgetControlAntiFraude
+                  datos={datosAntiFraudePorSucursal[idx]!}
+                  esDueno={true}
+                />
+              </div>
+            )}
 
             {/* Fila de Tarjetas de Ventas */}
             <div

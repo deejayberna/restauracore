@@ -14,6 +14,9 @@ import {
   Clock,
   Layers,
   FileSpreadsheet,
+  Smartphone,
+  Tablet,
+  Monitor,
 } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
@@ -83,6 +86,115 @@ export default function LandingPage() {
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sin compromisos ni contratos
             </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Adaptado a Celulares, Tablets y Pantallas ──────────────── */}
+      <section className="py-16 bg-neutral-900 text-white border-b border-neutral-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/20 mb-3">
+              100% Responsivo & Multi-Plataforma
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              Una experiencia fluida en cualquier dispositivo
+            </h2>
+            <p className="mt-3 text-neutral-400 text-base">
+              Desde el smartphone del comensal y la tablet del mesero, hasta la pantalla táctil de cocina y la laptop del dueño.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            {/* Celulares */}
+            <div className="relative rounded-2xl bg-neutral-800/60 border border-neutral-700/60 p-6 sm:p-7 hover:border-orange-500/50 transition-all card-hover-effect">
+              <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center mb-5">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-bold text-white">Celulares & Smartphones</h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-neutral-700 text-neutral-300">
+                  320px - 640px
+                </span>
+              </div>
+              <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+                Tus comensales escanean el QR en mesa, ordenan rondas sin descargar apps y pagan en línea. El dueño consulta ventas en vivo desde su teléfono.
+              </p>
+              <ul className="space-y-2 text-xs text-neutral-300">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Botones táctiles ergonómicos (&ge; 44px)</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Navegación inferior tipo App nativa</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Soporte para notch y safe areas de iOS/Android</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Tablets */}
+            <div className="relative rounded-2xl bg-neutral-800/60 border border-orange-500/40 p-6 sm:p-7 shadow-lg shadow-orange-500/5 hover:border-orange-500 transition-all card-hover-effect">
+              <div className="w-12 h-12 rounded-xl bg-orange-600 text-white flex items-center justify-center mb-5 shadow-sm">
+                <Tablet className="w-6 h-6" />
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-bold text-white">Tablets & iPads</h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300">
+                  768px - 1024px
+                </span>
+              </div>
+              <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+                La herramienta ideal para meseros en piso y comanderas táctiles en Cocina (KDS) y Barra. Tiempos de urgencia con cronómetro visual por colores.
+              </p>
+              <ul className="space-y-2 text-xs text-neutral-300">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Toma de órdenes rápida junto a la mesa</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Tableros de cocina de alto contraste</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Sidebar adaptable y gestos táctiles</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Computadoras y Pantallas POS */}
+            <div className="relative rounded-2xl bg-neutral-800/60 border border-neutral-700/60 p-6 sm:p-7 hover:border-orange-500/50 transition-all card-hover-effect">
+              <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center mb-5">
+                <Monitor className="w-6 h-6" />
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-bold text-white">Computadoras & POS</h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-neutral-700 text-neutral-300">
+                  1080p - 4K UltraWide
+                </span>
+              </div>
+              <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+                Control administrativo completo: arqueo ciego de caja, costeo de recetas en almacén, matriz de ingeniería de menú con IA y analítica financiera.
+              </p>
+              <ul className="space-y-2 text-xs text-neutral-300">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Tablas con filtros avanzados y ordenamiento</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Gráficas interactivas y exportación de reportes</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span>Consolidación multi-sucursal en tiempo real</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -158,17 +270,18 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* 5. Control Anti-Robo */}
+          {/* 5. Control Anti-Robo y Valor Protegido */}
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 sm:p-8 shadow-xs hover:border-neutral-300 transition-colors">
             <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-5">
               <ShieldAlert className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-neutral-900 mb-2">
-              Control Anti-Fuga: Mermas y Cancelaciones
+              Control Anti-Fuga & Valor Protegido
             </h3>
             <p className="text-sm text-neutral-600 leading-relaxed">
-              Foto obligatoria para mermas que superan tu umbral, y flujo de aprobación por gerente
-              con justificación obligatoria para cancelar platillos en preparación.
+              Sabrás exactamente cuánto dinero está protegiendo tu negocio cada mes: foto obligatoria
+              para mermas sobre el umbral, arqueo ciego y un reporte transparente de discrepancias
+              puestas bajo control.
             </p>
           </div>
 

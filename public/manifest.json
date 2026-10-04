@@ -1,0 +1,25 @@
+{
+  "name": "RestauraCore - Sistema Integral para Restaurantes",
+  "short_name": "RestauraCore",
+  "description": "Software integral para restaurantes: pedidos por QR, KDS de cocina, inventario automático por recetas, arqueo de caja e IA predictiva.",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#ea580c",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "64x64 128x128 256x256 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "food"]
+}

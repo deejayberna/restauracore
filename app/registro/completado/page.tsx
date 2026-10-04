@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, CheckCircle2, AlertCircle, UtensilsCrossed, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 import { consultarEstadoActivacionAction } from "@/lib/registro-actions";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 /**
  * [LEGACY / CÓDIGO PRESERVADO - FASE 11]
@@ -89,8 +90,8 @@ export default function RegistroCompletadoPage({
   return (
     <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-neutral-200 shadow-lg text-center space-y-6">
-        <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 mx-auto">
-          <UtensilsCrossed className="h-7 w-7" />
+        <div className="flex justify-center mx-auto">
+          <BrandLogo variant="mark" size="xl" />
         </div>
 
         {estado === "activando" && (

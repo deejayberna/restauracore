@@ -22,6 +22,7 @@ const FEATURES_COMPARATIVA = [
   { nombre: "Control de turnos y arqueo ciego de caja", basico: false, pro: true, enterprise: true },
   { nombre: "Mermas con foto obligatoria y justificación", basico: false, pro: true, enterprise: true },
   { nombre: "Control anti-fraude de cancelaciones de comandas", basico: false, pro: true, enterprise: true },
+  { nombre: "Reporte de Valor Protegido y Control Anti-Fraude", basico: false, pro: true, enterprise: true },
   { nombre: "IA: Predicción de demanda a 7 días (clima y festivos)", basico: false, pro: false, enterprise: true },
   { nombre: "IA: Detección estadística de anomalías y mermas", basico: false, pro: false, enterprise: true },
   { nombre: "IA: Menu Engineering (Matriz BCG de rentabilidad)", basico: false, pro: false, enterprise: true },
@@ -187,6 +188,16 @@ export default function PreciosPage() {
                 Tus datos históricos (órdenes, auditoría, recetas, inventario) nunca se borran. Se
                 mantienen respaldados de forma segura en caso de que decidas reactivar tu servicio en
                 el futuro.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-indigo-50/50 border border-indigo-200/80">
+              <h3 className="font-bold text-indigo-950">¿Qué es el reporte de "Valor Protegido"?</h3>
+              <p className="mt-2 text-sm text-indigo-900/80 leading-relaxed">
+                Sabrás exactamente cuánto dinero está protegiendo tu negocio cada mes. El sistema
+                audita en tiempo real faltantes en arqueos de caja, mermas sobre el umbral e intentos de
+                acceso no autorizados, ofreciéndote métricas objetivas y transparentes puestas en
+                evidencia, sin inflar números ni promesas inventadas.
               </p>
             </div>
           </div>

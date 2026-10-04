@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  UtensilsCrossed,
   CheckCircle2,
   ArrowRight,
   Store,
@@ -14,6 +13,7 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import {
   obtenerDatosWizardAction,
   guardarPaso1Action,
@@ -145,13 +145,8 @@ export default function BienvenidaWizardPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between">
       {/* Top Header */}
-      <header className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center">
-            <UtensilsCrossed className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-lg tracking-tight">RestauraCore</span>
-        </div>
+      <header className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between">
+        <BrandLogo size="sm" theme="dark" href="/bienvenida" />
         <button
           onClick={() => router.push("/home")}
           className="text-xs text-neutral-400 hover:text-neutral-200 transition"

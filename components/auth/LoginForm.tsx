@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { loginAction } from "@/lib/auth-actions";
 import {
-  UtensilsCrossed,
   Mail,
   Lock,
   Eye,
@@ -17,6 +16,7 @@ import {
   Sparkles,
   Clock,
 } from "lucide-react";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,14 +74,11 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
         {/* Encabezado del Formulario */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/25 mb-3">
-            <UtensilsCrossed className="w-6 h-6" />
+          <div className="flex justify-center mb-2">
+            <BrandLogo size="lg" theme="dark" withSubtitle={true} subtitle="Sistema Integral para Restaurantes" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
-            Restaura<span className="text-orange-500">Core</span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Sistema Integral ERP para Restaurantes y Administración
+          <p className="text-xs text-slate-400 mt-2">
+            Acceso administrativo y operativo de sucursales
           </p>
         </div>
 

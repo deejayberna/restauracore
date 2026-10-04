@@ -30,6 +30,7 @@ import {
 import { BranchSwitcher, type BranchInfo } from "./BranchSwitcher";
 import { NotificationBell, type NotificationCounts } from "./NotificationBell";
 import { Badge } from "@/components/ui/Badge";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { logoutAction } from "@/lib/auth-actions";
 
 export interface NavUser {
@@ -224,14 +225,7 @@ export function NavigationShell({
           >
             <Menu className="w-6 h-6" />
           </button>
-          <Link href="/home" className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-sky-600 flex items-center justify-center text-white font-black text-sm">
-              R
-            </span>
-            <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
-              Restauracore
-            </span>
-          </Link>
+          <BrandLogo size="sm" href="/home" theme="auto" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -249,18 +243,8 @@ export function NavigationShell({
       {/* ─── SIDEBAR ESCRITORIO (>= 768px) ─────────────────────────────────── */}
       <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 h-screen sticky top-0 z-20">
         {/* Logo & Brand */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-          <Link href="/home" className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-xl bg-sky-600 flex items-center justify-center text-white font-black text-base shadow-sm">
-              R
-            </span>
-            <div>
-              <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white block leading-none">
-                Restauracore
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">Gestión Inteligente</span>
-            </div>
-          </Link>
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+          <BrandLogo size="md" href="/home" withSubtitle={true} subtitle="Gestión Inteligente" theme="auto" />
           <NotificationBell counts={notificationCounts} />
         </div>
 
@@ -279,12 +263,12 @@ export function NavigationShell({
                 href={item.href}
                 className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
                   isActive
-                    ? "bg-sky-50 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300 font-bold shadow-2xs"
+                    ? "bg-orange-50/90 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 font-bold shadow-2xs"
                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={isActive ? "text-sky-600 dark:text-sky-400" : "text-slate-400"}>
+                  <span className={isActive ? "text-orange-600 dark:text-orange-400" : "text-slate-400"}>
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -306,7 +290,7 @@ export function NavigationShell({
               href="/perfil"
               className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity"
             >
-              <div className="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-900/80 text-sky-700 dark:text-sky-300 font-bold flex items-center justify-center text-xs shrink-0">
+              <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/60 text-orange-700 dark:text-orange-300 font-bold flex items-center justify-center text-xs shrink-0">
                 {user.nombre.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 truncate">
@@ -349,7 +333,7 @@ export function NavigationShell({
               href={item.href}
               className={`touch-target flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
                 isActive
-                  ? "text-sky-600 dark:text-sky-400"
+                  ? "text-orange-600 dark:text-orange-400 font-bold"
                   : "text-slate-500 hover:text-slate-800 dark:text-slate-400"
               }`}
             >
@@ -388,12 +372,7 @@ export function NavigationShell({
           <div className="relative w-4/5 max-w-xs bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
             {/* Header del drawer */}
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-lg bg-sky-600 flex items-center justify-center text-white font-black text-sm">
-                  R
-                </span>
-                <span className="font-bold text-sm">Restauracore</span>
-              </div>
+              <BrandLogo size="sm" href="/home" theme="auto" />
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
@@ -420,12 +399,12 @@ export function NavigationShell({
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center justify-between px-3 py-3 rounded-xl text-xs font-semibold transition-colors ${
                       isActive
-                        ? "bg-sky-50 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300 font-bold"
+                        ? "bg-orange-50 dark:bg-orange-950/70 text-orange-700 dark:text-orange-300 font-bold"
                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className={isActive ? "text-sky-600 dark:text-sky-400" : "text-slate-400"}>
+                      <span className={isActive ? "text-orange-600 dark:text-orange-400" : "text-slate-400"}>
                         {item.icon}
                       </span>
                       <span>{item.label}</span>

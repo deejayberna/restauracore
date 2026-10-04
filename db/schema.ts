@@ -9,6 +9,7 @@ import {
   timestamp,
   jsonb,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
@@ -513,6 +514,48 @@ export const ticketsSoporte = pgTable("tickets_soporte", {
   respondido_en: timestamp("respondido_en"),
 });
 
+export const clientesTelegram = pgTable(
+  "clientes_telegram",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    restaurante_id: uuid("restaurante_id")
+      .notNull()
+      .references(() => restaurantes.id, { onDelete: "cascade" }),
+    chat_id_telegram: text("chat_id_telegram").notNull(),
+    nombre_telegram: text("nombre_telegram"),
+    codigo_vinculacion: text("codigo_vinculacion").unique(),
+    orden_id_origen: uuid("orden_id_origen").references(() => ordenes.id, { onDelete: "set null" }),
+    ultima_visita_en: timestamp("ultima_visita_en").notNull().defaultNow(),
+    total_visitas: integer("total_visitas").notNull().default(1),
+    ultimo_mensaje_recuperacion_en: timestamp("ultimo_mensaje_recuperacion_en"),
+    activo: boolean("activo").notNull().default(true),
+    creado_en: timestamp("creado_en").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_clientes_telegram_restaurante").on(table.restaurante_id),
+    index("idx_clientes_telegram_chat").on(table.chat_id_telegram),
+    index("idx_clientes_telegram_codigo").on(table.codigo_vinculacion),
+    unique("uq_clientes_telegram_restaurante_chat").on(table.restaurante_id, table.chat_id_telegram),
+  ]
+);
+
+export const vinculacionesTelegramPendientes = pgTable(
+  "vinculaciones_telegram_pendientes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    codigo: text("codigo").notNull().unique(),
+    restaurante_id: uuid("restaurante_id")
+      .notNull()
+      .references(() => restaurantes.id, { onDelete: "cascade" }),
+    orden_id: uuid("orden_id").references(() => ordenes.id, { onDelete: "cascade" }),
+    creado_en: timestamp("creado_en").notNull().defaultNow(),
+    expira_en: timestamp("expira_en").notNull(),
+  },
+  (table) => [
+    index("idx_vinculaciones_telegram_codigo").on(table.codigo),
+  ]
+);
+
 // ─── Relaciones ──────────────────────────────────────────────────────────────
 
 
@@ -532,6 +575,7 @@ export const restaurantesRelations = relations(restaurantes, ({ many }) => ({
   reportesDiariosEnviados: many(reportesDiariosEnviados),
   recordatoriosTrialEnviados: many(recordatoriosTrialEnviados),
   ticketsSoporte: many(ticketsSoporte),
+  clientesTelegram: many(clientesTelegram),
 }));
 
 export const turnosRelations = relations(turnos, ({ one }) => ({
@@ -617,6 +661,18 @@ export const ordenesRelations = relations(ordenes, ({ one, many }) => ({
   mesa: one(mesas, { fields: [ordenes.mesa_id], references: [mesas.id] }),
   mesero: one(usuarios, { fields: [ordenes.mesero_id], references: [usuarios.id] }),
   items: many(ordenItems),
+  clientesTelegram: many(clientesTelegram),
+}));
+
+export const clientesTelegramRelations = relations(clientesTelegram, ({ one }) => ({
+  restaurante: one(restaurantes, {
+    fields: [clientesTelegram.restaurante_id],
+    references: [restaurantes.id],
+  }),
+  ordenOrigen: one(ordenes, {
+    fields: [clientesTelegram.orden_id_origen],
+    references: [ordenes.id],
+  }),
 }));
 
 export const ordenItemsRelations = relations(ordenItems, ({ one }) => ({
@@ -752,4 +808,11 @@ export type NuevoStripeEventoProcesado = InferInsertModel<typeof stripeEventosPr
 
 export type TicketSoporte = InferSelectModel<typeof ticketsSoporte>;
 export type NuevoTicketSoporte = InferInsertModel<typeof ticketsSoporte>;
+
+export type ClienteTelegram = InferSelectModel<typeof clientesTelegram>;
+export type NuevoClienteTelegram = InferInsertModel<typeof clientesTelegram>;
+
+export type VinculacionTelegramPendiente = InferSelectModel<typeof vinculacionesTelegramPendientes>;
+export type NuevaVinculacionTelegramPendiente = InferInsertModel<typeof vinculacionesTelegramPendientes>;
+
 

@@ -99,12 +99,16 @@ export default async function MenuEngineeringPage({ searchParams }: PageProps) {
           ← Volver al Dashboard
         </Link>
         <span style={{ color: "#aaa" }}>|</span>
-        <Link href="/inventario" style={linkNav}>
-          📦 Inventario
+        <Link href="/reportes/rentabilidad" style={linkNav}>
+          💰 Rentabilidad
         </Link>
         <span style={{ color: "#aaa" }}>|</span>
-        <Link href="/cocina" style={linkNav}>
-          🍳 Cocina
+        <Link href="/reportes/clientes" style={linkNav}>
+          📲 Retención Telegram
+        </Link>
+        <span style={{ color: "#aaa" }}>|</span>
+        <Link href="/inventario" style={linkNav}>
+          📦 Inventario
         </Link>
       </nav>
 

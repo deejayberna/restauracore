@@ -15,6 +15,7 @@ import {
 import { PLANES_DETALLE, type Plan } from "@/lib/planes";
 import { registrarRestauranteDirectoAction, type RegistroInput } from "@/lib/registro-actions";
 import { Turnstile } from "@/components/ui/Turnstile";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export default function RegistroPage({
   searchParams,
@@ -80,14 +81,7 @@ export default function RegistroPage({
       {/* Header simple */}
       <header className="border-b border-neutral-200 bg-white py-4 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-600 text-white">
-              <UtensilsCrossed className="h-4 w-4" />
-            </div>
-            <span className="text-lg font-bold">
-              Restaura<span className="text-orange-600">Core</span>
-            </span>
-          </Link>
+          <BrandLogo size="sm" href="/" theme="light" />
           <div className="text-sm text-neutral-500">
             ¿Ya tienes cuenta?{" "}
             <Link href="/login" className="font-semibold text-orange-600 hover:text-orange-700">

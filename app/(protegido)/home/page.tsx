@@ -34,6 +34,8 @@ import {
 import { eq, and, sql, desc, count } from "drizzle-orm";
 import { PanelMesasOperativas } from "@/components/mesas/PanelMesasOperativas";
 import { obtenerMesasOperativasAction } from "@/lib/mesas-actions";
+import { calcularValorProtegido } from "@/lib/roi-antifraude";
+import { WidgetControlAntiFraude } from "@/components/roi/WidgetControlAntiFraude";
 
 export default async function HomePage() {
   const { user, currentBranchId } = await getProtectedLayoutData();
@@ -178,25 +180,37 @@ export default async function HomePage() {
     ventasHoy = Number(ventasRes?.total ?? 0);
   }
 
+  let valorProtegidoData = null;
+  if (["gerente", "dueno"].includes(user.rol)) {
+    try {
+      valorProtegidoData = await calcularValorProtegido(currentBranchId);
+    } catch (e) {
+      console.error("Error al calcular valor protegido en home:", e);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* ─── BANNER DE BIENVENIDA ───────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-sky-600 to-indigo-700 dark:from-sky-950 dark:to-indigo-950 rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
+      <div className="bg-linear-to-r from-slate-900 via-slate-800 to-neutral-900 border border-slate-800/80 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        {/* Glow de acento de marca */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-600/15 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
         <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-xs">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="text-[11px] font-bold uppercase tracking-wider bg-orange-500/20 text-orange-300 border border-orange-500/30 px-3 py-1 rounded-full backdrop-blur-xs">
               Estación de Trabajo
             </span>
-            <span className="text-xs text-sky-100 uppercase tracking-wide">
-              • Rol: <strong>{user.rol}</strong>
+            <span className="text-xs text-slate-400 uppercase tracking-wide">
+              • Rol activo: <strong className="text-white capitalize">{user.rol}</strong>
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
             Hola, {user.nombre}
           </h1>
-          <p className="text-xs sm:text-sm text-sky-100 mt-1 max-w-xl">
-            Bienvenido al panel operativo de Restauracore. Aquí tienes el resumen y accesos
-            principales para tu turno de hoy.
+          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-xl leading-relaxed">
+            Bienvenido a tu panel de control <strong className="text-orange-400">RestauraCore</strong>. Todo listo para gestionar turnos, comandas e inventario en tiempo real.
           </p>
         </div>
       </div>
@@ -468,6 +482,14 @@ export default async function HomePage() {
                 </Button>
               </Link>
             </div>
+          )}
+
+          {/* Widget de Control Anti-Fraude (Fase ROI Transparente) */}
+          {valorProtegidoData && (
+            <WidgetControlAntiFraude
+              datos={valorProtegidoData}
+              esDueno={user.rol === "dueno"}
+            />
           )}
 
           {/* Tarjetas KPI */}

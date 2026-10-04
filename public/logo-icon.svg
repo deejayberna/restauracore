@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="rc-icon-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EA580C" />
+      <stop offset="55%" stop-color="#F97316" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+
+    <!-- Flame Highlight Gradient -->
+    <linearGradient id="rc-icon-flame" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="65%" stop-color="#FFF7ED" />
+      <stop offset="100%" stop-color="#FED7AA" />
+    </linearGradient>
+
+    <!-- Inner Core Glow -->
+    <linearGradient id="rc-icon-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="rc-icon-shadow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#7C2D12" flood-opacity="0.32" />
+    </filter>
+  </defs>
+
+  <!-- Background Container -->
+  <rect width="64" height="64" rx="16" fill="url(#rc-icon-bg)" />
+  <rect x="1" y="1" width="62" height="62" rx="15" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+
+  <!-- Ambient Detail Ring -->
+  <circle cx="32" cy="32" r="23" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="3 3" />
+
+  <!-- Emblem -->
+  <g filter="url(#rc-icon-shadow)">
+    <!-- Base Plate Cloche -->
+    <path
+      d="M16 42.5C21 46.5 43 46.5 48 42.5C46 44 18 44 16 42.5Z"
+      fill="#FFFFFF"
+      opacity="0.9"
+    />
+    <path
+      d="M17 38C22 42.5 42 42.5 47 38C45 40 19 40 17 38Z"
+      fill="#FFFFFF"
+      opacity="0.75"
+    />
+
+    <!-- Main Dynamic Culinary Flame -->
+    <path
+      d="M32 12C32 12 39 19.5 39 27C39 33 34.5 36.5 32 36.5C29.5 36.5 25 33 25 27C25 21.5 29 16.5 32 12Z"
+      fill="url(#rc-icon-flame)"
+    />
+
+    <!-- Core Digital Glow -->
+    <path
+      d="M32 23C33.8 23 35.5 25.2 35.5 28C35.5 30.5 33.8 32.5 32 32.5C30.2 32.5 28.5 30.5 28.5 28C28.5 26.2 30 24.5 32 23Z"
+      fill="url(#rc-icon-core)"
+    />
+
+    <!-- Technology Spark -->
+    <path
+      d="M44 16L45.2 18.8L48 20L45.2 21.2L44 24L42.8 21.2L40 20L42.8 18.8L44 16Z"
+      fill="#FFFFFF"
+      opacity="0.95"
+    />
+  </g>
+</svg>

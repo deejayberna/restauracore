@@ -7,6 +7,7 @@ import { validateOrThrow, z } from "@/lib/validation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { cookies } from "next/headers";
 import { UnauthorizedError, NotFoundError } from "@/lib/errors";
+import { notificarPedidoListoTelegram } from "@/lib/telegram-clientes";
 
 const schema = z.object({
   item_id: z.string().uuid(),
@@ -112,6 +113,23 @@ export async function actualizarEstadoItem(formData: FormData) {
     .update(ordenItems)
     .set({ estado })
     .where(eq(ordenItems.id, item_id));
+
+  // 8. Si pasa a "listo", verificar si todos los items de la orden están listos para notificar al cliente vía Telegram
+  if (estado === "listo") {
+    try {
+      const otrosItems = await db.query.ordenItems.findMany({
+        where: eq(ordenItems.orden_id, itemConOrden.orden_id),
+      });
+      const todosListos = otrosItems.every(
+        (it) => it.id === item_id || it.estado === "listo" || it.estado === "entregado" || it.estado === "cancelado"
+      );
+      if (todosListos) {
+        notificarPedidoListoTelegram(itemConOrden.orden_id).catch(() => {});
+      }
+    } catch {
+      // Notificación opcional no bloqueante
+    }
+  }
 
   return { exito: true };
 }

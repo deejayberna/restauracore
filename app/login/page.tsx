@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { UtensilsCrossed } from "lucide-react";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export default async function LoginPage({
   searchParams,
@@ -18,14 +18,7 @@ export default async function LoginPage({
       {/* Header simple */}
       <header className="relative z-10 border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md px-4 sm:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-600 text-white group-hover:scale-105 transition-transform">
-              <UtensilsCrossed className="h-4 w-4" />
-            </div>
-            <span className="text-base font-black text-white">
-              Restaura<span className="text-orange-500">Core</span>
-            </span>
-          </Link>
+          <BrandLogo size="sm" theme="dark" href="/" />
 
           <div className="flex items-center gap-3 text-xs">
             <Link

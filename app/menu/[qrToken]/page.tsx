@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { validateOrThrow, z } from "@/lib/validation";
 import { BotonAgregar } from "@/components/carrito/BotonAgregar";
 import { ResumenCarrito } from "@/components/carrito/ResumenCarrito";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 const qrTokenSchema = z.object({
   qrToken: z.string().min(1).max(100),
@@ -52,9 +53,16 @@ export default async function MenuPage({ params }: Props) {
   }));
 
   return (
-    <main style={{ maxWidth: 600, margin: "0 auto", padding: "1rem 1rem 6rem" }}>
-        <h1>{restaurante.nombre}</h1>
-        <p style={{ opacity: 0.6 }}>Mesa {mesa.numero}</p>
+    <main className="max-w-xl mx-auto px-4 py-6 pb-28 min-h-screen">
+      <header className="mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-neutral-900 dark:text-white tracking-tight">{restaurante.nombre}</h1>
+          <p className="text-xs text-neutral-500 font-medium">Menú digital & comanda en mesa</p>
+        </div>
+        <div className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-600 dark:text-orange-400 font-bold text-xs">
+          Mesa {mesa.numero}
+        </div>
+      </header>
 
         {menuPorCategoria.map((cat) =>
           cat.platillos.length === 0 ? null : (
@@ -101,6 +109,11 @@ export default async function MenuPage({ params }: Props) {
             </section>
           )
         )}
+
+      <footer className="mt-12 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex flex-col items-center justify-center gap-2 text-center text-xs text-neutral-400">
+        <span>Menú digital y pedidos en mesa gestionados con</span>
+        <BrandLogo size="xs" variant="compact" href="/" theme="auto" />
+      </footer>
     </main>
   );
 }
