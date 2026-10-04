@@ -7,6 +7,8 @@ export interface BrandLogoProps {
   theme?: "light" | "dark" | "auto";
   withSubtitle?: boolean;
   subtitle?: string;
+  withBadge?: boolean;
+  badgeText?: string;
   className?: string;
   href?: string;
 }
@@ -17,55 +19,57 @@ export function BrandLogo({
   theme = "auto",
   withSubtitle = false,
   subtitle = "Gestión Inteligente",
+  withBadge = false,
+  badgeText = "PRO",
   className = "",
   href,
 }: BrandLogoProps) {
   // Dimensions according to size
   const sizeConfig = {
     xs: {
-      box: "w-6 h-6 rounded-md",
-      iconSize: 24,
+      box: "w-7 h-7 rounded-lg ring-1 ring-amber-500/40",
       title: "text-sm",
       sub: "text-[8px] tracking-wider",
+      badge: "text-[8px] px-1 py-0.2",
       gap: "gap-2",
     },
     sm: {
-      box: "w-8 h-8 rounded-lg",
-      iconSize: 32,
+      box: "w-8 h-8 rounded-lg ring-1 ring-amber-500/40",
       title: "text-base",
       sub: "text-[9px] tracking-wider",
+      badge: "text-[8.5px] px-1.5 py-0.5",
       gap: "gap-2.5",
     },
     md: {
-      box: "w-9 h-9 rounded-xl",
-      iconSize: 36,
-      title: "text-lg",
+      box: "w-10 h-10 rounded-xl ring-1.5 ring-amber-500/50",
+      title: "text-lg sm:text-xl",
       sub: "text-[10px] tracking-wider",
-      gap: "gap-2.5",
-    },
-    lg: {
-      box: "w-11 h-11 rounded-xl",
-      iconSize: 44,
-      title: "text-xl",
-      sub: "text-[11px] tracking-widest",
+      badge: "text-[9px] px-1.5 py-0.5",
       gap: "gap-3",
     },
+    lg: {
+      box: "w-12 h-12 rounded-xl ring-1.5 ring-amber-500/50",
+      title: "text-xl sm:text-2xl",
+      sub: "text-[11px] tracking-widest",
+      badge: "text-[10px] px-2 py-0.5",
+      gap: "gap-3.5",
+    },
     xl: {
-      box: "w-14 h-14 rounded-2xl",
-      iconSize: 56,
+      box: "w-16 h-16 rounded-2xl ring-2 ring-amber-500/60",
       title: "text-2xl sm:text-3xl",
       sub: "text-xs tracking-widest",
-      gap: "gap-3.5",
+      badge: "text-xs px-2.5 py-1",
+      gap: "gap-4",
     },
   }[size];
 
   // Theme text styling
   const titleColor =
     theme === "dark"
-      ? "text-white"
+      ? "text-slate-100"
       : theme === "light"
         ? "text-slate-900"
-        : "text-slate-900 dark:text-white";
+        : "text-slate-900 dark:text-slate-100";
 
   const subColor =
     theme === "dark"
@@ -74,67 +78,86 @@ export function BrandLogo({
         ? "text-slate-500"
         : "text-slate-500 dark:text-slate-400";
 
-  // Emblem Vector Mark
+  // Emblem Vector Mark (Obsidian & Solar Core Emblem)
   const Emblem = (
     <div
-      className={`relative shrink-0 flex items-center justify-center overflow-hidden shadow-md shadow-orange-500/20 bg-linear-to-br from-orange-600 via-orange-500 to-amber-500 ${sizeConfig.box}`}
+      className={`relative shrink-0 flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-900 via-slate-950 to-neutral-950 shadow-md shadow-orange-950/40 transition-transform group-hover:scale-105 ${sizeConfig.box}`}
     >
-      {/* Subtle top glare */}
-      <div className="absolute inset-0 bg-linear-to-b from-white/30 to-transparent pointer-events-none" />
-      <div className="absolute inset-[1px] rounded-[inherit] border border-white/35 pointer-events-none" />
+      {/* Outer Glow Highlight */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/10 via-transparent to-amber-400/20 pointer-events-none" />
+      <div className="absolute inset-0 rounded-[inherit] border border-amber-500/30 pointer-events-none" />
 
       {/* SVG Icon Artwork */}
       <svg
-        viewBox="0 0 48 48"
+        viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-[72%] h-[72%] relative z-10"
+        className="w-[84%] h-[84%] relative z-10"
       >
         <defs>
-          <linearGradient id="bl-flame" x1="24" y1="9" x2="24" y2="28" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FFFFFF" />
-            <stop offset="0.7" stopColor="#FFF7ED" />
-            <stop offset="1" stopColor="#FED7AA" />
-          </linearGradient>
-          <linearGradient id="bl-core" x1="24" y1="18" x2="24" y2="25" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FBBF24" />
+          <linearGradient id="bl-core-flame" x1="32" y1="10" x2="32" y2="40" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#FFFBEB" />
+            <stop offset="0.3" stopColor="#FDE68A" />
+            <stop offset="0.7" stopColor="#F59E0B" />
             <stop offset="1" stopColor="#EA580C" />
           </linearGradient>
-          <filter id="bl-shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodColor="#7C2D12" floodOpacity="0.4" />
+
+          <linearGradient id="bl-diamond" x1="29" y1="22" x2="35" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#FFFFFF" />
+            <stop offset="1" stopColor="#FDE047" />
+          </linearGradient>
+
+          <filter id="bl-core-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#EA580C" floodOpacity="0.6" />
           </filter>
         </defs>
 
-        <g filter="url(#bl-shadow)">
+        {/* Radial Ambient Core Flare */}
+        <circle cx="32" cy="32" r="16" fill="#EA580C" opacity="0.35" />
+
+        <g filter="url(#bl-core-glow)">
           {/* Base Cloche / Plate Arc */}
           <path
-            d="M12 34C16 37 32 37 36 34C34.5 35.5 13.5 35.5 12 34Z"
+            d="M14 43.5C20 47.5 44 47.5 50 43.5C47.5 45.5 16.5 45.5 14 43.5Z"
             fill="#FFFFFF"
-            fillOpacity="0.95"
+            opacity="0.95"
           />
           <path
-            d="M13.5 30C17.5 33.5 30.5 33.5 34.5 30C33 31.5 15 31.5 13.5 30Z"
-            fill="#FFFFFF"
-            fillOpacity="0.75"
+            d="M16 39.5C21.5 43.5 42.5 43.5 48 39.5C45.5 41.5 18.5 41.5 16 39.5Z"
+            fill="url(#bl-core-flame)"
+            opacity="0.9"
           />
 
-          {/* Dynamic Culinary Flame */}
+          {/* 3-Tier Dynamic Culinary Crown */}
+          {/* Left Wing */}
           <path
-            d="M24 9C24 9 29.5 15 29.5 21C29.5 25.5 26 28.5 24 28.5C22 28.5 18.5 25.5 18.5 21C18.5 16.5 21.5 12.5 24 9Z"
-            fill="url(#bl-flame)"
+            d="M24 36C22 33 21 28 23 23C25 27 27 29 27 33C27 34.5 26 35.5 24 36Z"
+            fill="#F59E0B"
+            opacity="0.95"
+          />
+          {/* Right Wing */}
+          <path
+            d="M40 36C42 33 43 28 41 23C39 27 37 29 37 33C37 34.5 38 35.5 40 36Z"
+            fill="#F59E0B"
+            opacity="0.95"
+          />
+          {/* Center Torch */}
+          <path
+            d="M32 11C32 11 38 18 38 26C38 32.5 35 37 32 37C29 37 26 32.5 26 26C26 18 32 11 32 11Z"
+            fill="url(#bl-core-flame)"
           />
 
-          {/* Inner Energy Core */}
+          {/* Central Radiant Diamond Spark / Intelligence Core */}
           <path
-            d="M24 18C25.4 18 26.8 19.6 26.8 21.8C26.8 23.8 25.4 25.3 24 25.3C22.6 25.3 21.2 23.8 21.2 21.8C21.2 20.4 22.4 19.1 24 18Z"
-            fill="url(#bl-core)"
+            d="M32 22L34.5 27L32 32L29.5 27L32 22Z"
+            fill="url(#bl-diamond)"
           />
 
-          {/* Intelligence Spark */}
+          {/* Top Sparkle Stars */}
+          <circle cx="32" cy="11.5" r="1.5" fill="#FFFFFF" />
           <path
-            d="M33.5 12L34.4 14.2L36.6 15.1L34.4 16L33.5 18.2L32.6 16L30.4 15.1L32.6 14.2L33.5 12Z"
-            fill="#FFFFFF"
-            fillOpacity="0.95"
+            d="M44 15L45.2 17.5L48 18.5L45.2 19.5L44 22L42.8 19.5L40 18.5L42.8 17.5L44 15Z"
+            fill="#FDE047"
           />
         </g>
       </svg>
@@ -160,9 +183,18 @@ export function BrandLogo({
     <div className={`inline-flex items-center ${sizeConfig.gap} ${className}`}>
       {Emblem}
       <div className="flex flex-col text-left leading-none">
-        <span className={`font-black tracking-tight ${sizeConfig.title} ${titleColor}`}>
-          Restaura<span className="text-transparent bg-clip-text bg-linear-to-r from-orange-600 to-amber-500">Core</span>
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-black tracking-tight ${sizeConfig.title} ${titleColor}`}>
+            Restaura<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500">Core</span>
+          </span>
+          {withBadge && (
+            <span
+              className={`rounded-md font-extrabold uppercase tracking-wide bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 shadow-xs ${sizeConfig.badge}`}
+            >
+              {badgeText}
+            </span>
+          )}
+        </div>
         {withSubtitle && (
           <span className={`font-bold uppercase mt-1 ${sizeConfig.sub} ${subColor}`}>
             {subtitle}
@@ -185,3 +217,4 @@ export function BrandLogo({
 
   return content;
 }
+

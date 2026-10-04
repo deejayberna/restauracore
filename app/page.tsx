@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { HeroProductShowcase } from "@/components/marketing/HeroProductShowcase";
 import { PLANES_DETALLE } from "@/lib/planes";
 
 export const metadata: Metadata = {
@@ -76,7 +77,7 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <div className="mt-12 flex items-center justify-center gap-6 text-xs sm:text-sm text-neutral-500">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs sm:text-sm text-neutral-500">
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sin tarjeta de crédito
             </span>
@@ -87,6 +88,9 @@ export default function LandingPage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sin compromisos ni contratos
             </span>
           </div>
+
+          {/* Interactive Live Product Preview */}
+          <HeroProductShowcase />
         </div>
       </section>
 

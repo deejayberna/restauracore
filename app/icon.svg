@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <!-- Background Gradient: Deep Obsidian with subtle metallic lighting -->
-    <linearGradient id="icon-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Background Gradient: Deep Obsidian with warm inner gradient -->
+    <linearGradient id="fav-bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0F172A" />
       <stop offset="50%" stop-color="#1E293B" />
       <stop offset="100%" stop-color="#090D16" />
     </linearGradient>
 
     <!-- Glowing Rim Border -->
-    <linearGradient id="icon-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="fav-rim" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#F59E0B" />
       <stop offset="50%" stop-color="#EA580C" />
       <stop offset="100%" stop-color="#C2410C" />
     </linearGradient>
 
     <!-- Solar Flame Gradient -->
-    <linearGradient id="icon-flame" x1="50%" y1="0%" x2="50%" y2="100%">
+    <linearGradient id="fav-flame" x1="50%" y1="0%" x2="50%" y2="100%">
       <stop offset="0%" stop-color="#FFFBEB" />
       <stop offset="30%" stop-color="#FDE68A" />
       <stop offset="70%" stop-color="#F59E0B" />
@@ -23,26 +23,26 @@
     </linearGradient>
 
     <!-- Inner Core Diamond -->
-    <linearGradient id="icon-core" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="fav-core" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF" />
       <stop offset="100%" stop-color="#FDE047" />
     </linearGradient>
 
     <!-- Ambient Shadow -->
-    <filter id="icon-glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#EA580C" flood-opacity="0.65" />
+    <filter id="fav-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#EA580C" flood-opacity="0.6" />
     </filter>
   </defs>
 
-  <!-- Dark Shield Base with rounded squircle -->
-  <rect width="64" height="64" rx="16" fill="url(#icon-bg)" />
-  <rect x="1" y="1" width="62" height="62" rx="15" stroke="url(#icon-rim)" stroke-width="2" />
+  <!-- Dark Shield Base -->
+  <rect width="64" height="64" rx="16" fill="url(#fav-bg)" />
+  <rect x="1" y="1" width="62" height="62" rx="15" stroke="url(#fav-rim)" stroke-width="2" />
 
   <!-- Radial Core Glow -->
-  <circle cx="32" cy="34" r="19" fill="#EA580C" opacity="0.38" filter="blur(6px)" />
+  <circle cx="32" cy="34" r="18" fill="#EA580C" opacity="0.35" filter="blur(6px)" />
 
   <!-- Main Emblem Artwork -->
-  <g filter="url(#icon-glow)">
+  <g filter="url(#fav-glow)">
     <!-- Polished Serving Cloche Base -->
     <path
       d="M14 43.5C20 47.5 44 47.5 50 43.5C47.5 45.5 16.5 45.5 14 43.5Z"
@@ -51,7 +51,7 @@
     />
     <path
       d="M16 39.5C21.5 43.5 42.5 43.5 48 39.5C45.5 41.5 18.5 41.5 16 39.5Z"
-      fill="url(#icon-flame)"
+      fill="url(#fav-flame)"
       opacity="0.9"
     />
 
@@ -71,13 +71,13 @@
     <!-- Center Main Torch Flame -->
     <path
       d="M32 11C32 11 38 18 38 26C38 32.5 35 37 32 37C29 37 26 32.5 26 26C26 18 32 11 32 11Z"
-      fill="url(#icon-flame)"
+      fill="url(#fav-flame)"
     />
 
     <!-- Central Radiant Diamond Spark / Intelligence Core -->
     <path
       d="M32 22L34.5 27L32 32L29.5 27L32 22Z"
-      fill="url(#icon-core)"
+      fill="url(#fav-core)"
     />
 
     <!-- Top Sparkle Star -->
@@ -88,4 +88,3 @@
     />
   </g>
 </svg>
-
