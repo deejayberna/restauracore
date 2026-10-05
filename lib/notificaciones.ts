@@ -958,7 +958,7 @@ async function enviarEmailNuevoTicket(
           ${payload.mensaje.replace(/\n/g, "<br/>")}
         </blockquote>
         <br/>
-        <p>Puedes responder este ticket ingresando al panel de Super-Admin en <a href="https://restauracore.vercel.app/superadmin">/superadmin</a>.</p>
+        <p>Puedes responder este ticket ingresando al panel de Super-Admin en <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/superadmin">/superadmin</a>.</p>
       `,
     }),
   });

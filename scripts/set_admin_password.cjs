@@ -86,7 +86,8 @@ async function main() {
     console.log(`✅ ¡Usuario creado exitosamente (ID: ${created.user.id}) con contraseña activa!`);
   }
 
-  console.log(`\n🎉 Todo listo: Ya puedes ingresar a https://restauracore.vercel.app/login con:`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://restautom.vercel.app';
+  console.log(`\n🎉 Todo listo: Ya puedes ingresar a ${appUrl}/login con:`);
   console.log(`   Email   : ${email}`);
   console.log(`   Password: [la contraseña que definiste]`);
   console.log(`   (Al ingresar, el sistema te redirigirá directamente a /superadmin)\n`);
