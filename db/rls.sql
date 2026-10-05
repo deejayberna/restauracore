@@ -48,6 +48,9 @@ ALTER TABLE pagos                        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registros_pendientes         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stripe_eventos_procesados    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets_soporte              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clientes_telegram  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS vinculaciones_telegram_pendientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS recordatorios_trial_enviados ENABLE ROW LEVEL SECURITY;
 
 
 -- ─── 3. TRIGGERS DEL SISTEMA ──────────────────────────────────
@@ -637,6 +640,39 @@ BEGIN
               AND ur.rol IN (''gerente'', ''dueno'')
           )
         );
+
+      -- Políticas para bucket público ''menu-fotos''
+      DROP POLICY IF EXISTS "menu_fotos_storage_select" ON storage.objects;
+      CREATE POLICY "menu_fotos_storage_select" ON storage.objects
+        FOR SELECT USING (bucket_id = ''menu-fotos'');
+
+      DROP POLICY IF EXISTS "menu_fotos_storage_insert" ON storage.objects;
+      CREATE POLICY "menu_fotos_storage_insert" ON storage.objects
+        FOR INSERT WITH CHECK (
+          bucket_id = ''menu-fotos''
+          AND EXISTS (
+            SELECT 1 FROM usuario_restaurantes ur
+            JOIN usuarios u ON u.id = ur.usuario_id
+            WHERE u.auth_id = auth.uid()::text
+              AND ur.restaurante_id = (storage.foldername(name))[1]::uuid
+              AND ur.activo = true
+              AND ur.rol IN (''gerente'', ''dueno'')
+          )
+        );
+
+      DROP POLICY IF EXISTS "menu_fotos_storage_delete" ON storage.objects;
+      CREATE POLICY "menu_fotos_storage_delete" ON storage.objects
+        FOR DELETE USING (
+          bucket_id = ''menu-fotos''
+          AND EXISTS (
+            SELECT 1 FROM usuario_restaurantes ur
+            JOIN usuarios u ON u.id = ur.usuario_id
+            WHERE u.auth_id = auth.uid()::text
+              AND ur.restaurante_id = (storage.foldername(name))[1]::uuid
+              AND ur.activo = true
+              AND ur.rol IN (''gerente'', ''dueno'')
+          )
+        );
     ';
   END IF;
 END $$;
@@ -651,4 +687,52 @@ DROP POLICY IF EXISTS "tickets_soporte_insert_tenant" ON tickets_soporte;
 CREATE POLICY "tickets_soporte_insert_tenant" ON tickets_soporte
   FOR INSERT TO authenticated
   WITH CHECK (restaurante_id IN (SELECT restaurantes_activos_del_usuario()));
+
+-- ─── 9. Políticas para clientes_telegram y vinculaciones_telegram_pendientes ───
+-- clientes_telegram
+DROP POLICY IF EXISTS "clientes_telegram_select" ON "public"."clientes_telegram";
+CREATE POLICY "clientes_telegram_select" ON "public"."clientes_telegram"
+  FOR SELECT USING (
+    restaurante_id IN (
+      SELECT ur.restaurante_id FROM usuario_restaurantes ur
+      JOIN usuarios u ON u.id = ur.usuario_id
+      WHERE u.auth_id = auth.uid()::text
+        AND ur.activo = true
+    )
+  );
+
+DROP POLICY IF EXISTS "clientes_telegram_modify" ON "public"."clientes_telegram";
+CREATE POLICY "clientes_telegram_modify" ON "public"."clientes_telegram"
+  FOR ALL USING (
+    restaurante_id IN (
+      SELECT ur.restaurante_id FROM usuario_restaurantes ur
+      JOIN usuarios u ON u.id = ur.usuario_id
+      WHERE u.auth_id = auth.uid()::text
+        AND ur.activo = true
+        AND ur.rol IN ('gerente', 'dueno')
+    )
+  );
+
+-- vinculaciones_telegram_pendientes
+DROP POLICY IF EXISTS "vinculaciones_telegram_select" ON "public"."vinculaciones_telegram_pendientes";
+CREATE POLICY "vinculaciones_telegram_select" ON "public"."vinculaciones_telegram_pendientes"
+  FOR SELECT USING (
+    restaurante_id IN (
+      SELECT ur.restaurante_id FROM usuario_restaurantes ur
+      JOIN usuarios u ON u.id = ur.usuario_id
+      WHERE u.auth_id = auth.uid()::text
+        AND ur.activo = true
+    )
+  );
+
+DROP POLICY IF EXISTS "vinculaciones_telegram_all" ON "public"."vinculaciones_telegram_pendientes";
+CREATE POLICY "vinculaciones_telegram_all" ON "public"."vinculaciones_telegram_pendientes"
+  FOR ALL USING (
+    restaurante_id IN (
+      SELECT ur.restaurante_id FROM usuario_restaurantes ur
+      JOIN usuarios u ON u.id = ur.usuario_id
+      WHERE u.auth_id = auth.uid()::text
+        AND ur.activo = true
+    )
+  );
 
