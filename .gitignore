@@ -46,3 +46,7 @@ next-env.d.ts
 
 # local binaries & tools
 /bin/
+
+# temporary scratch directory
+scratch/
+/scratch/
