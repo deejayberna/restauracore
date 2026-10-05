@@ -70,7 +70,7 @@ export async function generarLinkVinculacionTelegram({
   const botUsername =
     process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ||
     process.env.TELEGRAM_BOT_USERNAME ||
-    "RestauracoreBot";
+    "RestauraninverBot";
 
   const link = `https://t.me/${botUsername}?start=${codigo}`;
 
