@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
     nombre: string;
     diasRestantes?: number;
     procesado: boolean;
-    omitido_por_horario?: boolean;
     omitido_por_duplicado?: boolean;
     error?: string;
   }[] = [];
@@ -51,21 +50,36 @@ export async function GET(request: NextRequest) {
 
     const tz = rest.timezone ?? "America/Mexico_City";
     const fechaFin = new Date(rest.fecha_fin_trial);
-    const diffMs = fechaFin.getTime() - ahora.getTime();
-    const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-    // Solo se notifica a 2 días o 1 día de distancia (o forzado para pruebas)
+    // Si ya expiró en tiempo real (fecha_fin <= ahora), el Paywall se encarga; NO enviar recordatorio
+    if (fechaFin.getTime() <= ahora.getTime()) {
+      continue;
+    }
+
+    // Fechas de calendario en la zona horaria local del restaurante (YYYY-MM-DD)
+    const fechaLocalHoy = ahora.toLocaleDateString("en-CA", { timeZone: tz });
+    const fechaLocalFin = fechaFin.toLocaleDateString("en-CA", { timeZone: tz });
+
+    // Cálculo de días restantes basado en la fecha local del restaurante
+    const msPorDia = 1000 * 60 * 60 * 24;
+    const [yHoy, mHoy, dHoy] = fechaLocalHoy.split("-").map(Number);
+    const [yFin, mFin, dFin] = fechaLocalFin.split("-").map(Number);
+    const utcHoy = Date.UTC(yHoy, mHoy - 1, dHoy);
+    const utcFin = Date.UTC(yFin, mFin - 1, dFin);
+    const diasRestantes = Math.round((utcFin - utcHoy) / msPorDia);
+
+    // Solo se notifica a 2 días o 1 día de distancia (o forzado para pruebas si no ha vencido)
     if ((diasRestantes !== 2 && diasRestantes !== 1) && !forzarEnvio) {
       continue;
     }
 
-    // Si ya expiró (<= 0), el Paywall se encarga; no enviar recordatorio
+    // Si ya expiró por fecha de calendario (<= 0), no enviar recordatorio
     if (diasRestantes <= 0) {
       continue;
     }
 
     // Formato YYYY-MM-DD local
-    const fechaLocal = ahora.toLocaleDateString("en-CA", { timeZone: tz });
+    const fechaLocal = fechaLocalHoy;
 
     // 3. IDEMPOTENCIA ATÓMICA: Registrar en recordatorios_trial_enviados antes de notificar
     // UNIQUE(restaurante_id, dias_restantes) previene envíos repetidos en base de datos

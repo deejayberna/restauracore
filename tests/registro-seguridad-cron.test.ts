@@ -294,6 +294,51 @@ describe("Seguridad del Registro y Cron de Recordatorios de Trial (Días 12 y 13
 
       spyNotif.mockRestore();
     });
+
+    it("NO envía recordatorio si el trial ya está vencido, incluso con force=true", async () => {
+      // Crear restaurante con trial vencido (ayer)
+      const ayer = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const [restVencido] = await db
+        .insert(restaurantes)
+        .values({
+          nombre: `Restaurante Trial Vencido ${timestamp}`,
+          timezone: "America/Mexico_City",
+          plan: "pro",
+          estado_suscripcion: "trial",
+          fecha_fin_trial: ayer,
+        })
+        .returning();
+      createdRestauranteIds.push(restVencido.id);
+
+      const spyNotif = vi.spyOn(notificaciones, "enviarNotificacionRecordatorioTrial").mockResolvedValue();
+
+      const cronSecret = process.env.CRON_SECRET || "cron-test-secret";
+      const req = new NextRequest(
+        `http://localhost:3000/api/cron/recordatorio-trial?force=true&restaurante_id=${restVencido.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${cronSecret}`,
+          },
+        }
+      );
+
+      const res = await recordatorioTrialCronGET(req);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      // No debe figurar en resultados procesados ni haberse enviado notificación
+      const resItem = data.resultados.find((i: any) => i.restaurante_id === restVencido.id);
+      expect(resItem).toBeUndefined();
+      expect(spyNotif).not.toHaveBeenCalled();
+
+      // Tampoco debe haberse creado registro en recordatorios_trial_enviados
+      const registroIdemp = await db.query.recordatoriosTrialEnviados.findFirst({
+        where: eq(recordatoriosTrialEnviados.restaurante_id, restVencido.id),
+      });
+      expect(registroIdemp).toBeUndefined();
+
+      spyNotif.mockRestore();
+    });
   });
 
   describe("3. Bloqueo en Día 15+ (Paywall)", () => {
