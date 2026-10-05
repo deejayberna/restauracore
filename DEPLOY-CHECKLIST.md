@@ -1,79 +1,115 @@
 # Variables de Entorno para Producción en Vercel (DEPLOY-CHECKLIST)
 
 Configura estas variables en **Vercel** (`Project Settings` -> `Environment Variables`).  
-Asegúrate de marcar la casilla **Production** y hacer un **Redeploy** para que las funciones Edge y Server Actions tomen los cambios.
+Asegúrate de marcar la casilla del entorno correspondiente (**Production** para valores en vivo) y realizar un **Redeploy** tras modificarlas para que las funciones Serverless y Server Actions tomen los cambios.
+
+> [!IMPORTANT]
+> **Convención de Visibilidad y Seguridad:**
+> - Toda variable con prefijo **`NEXT_PUBLIC_*`** se expone y compila directamente en el bundle JavaScript del cliente web. En Vercel debe configurarse como **Config** (texto plano, no sensible).
+> - Toda variable sin prefijo (secretos de backend, llaves de API privadas, tokens y credenciales de BD) debe configurarse como **Secret / Sensitive** en Vercel.
 
 ---
 
 ## 1. Supabase (Base de Datos & Auth de Producción)
 > *Copia estos valores directamente desde tu archivo `.env.production.local`.*
 
-| Variable | De dónde sale | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`DATABASE_URL`** | Línea 2 de `.env.production.local` (`postgresql://postgres.lzmawhowjxgovxewmray...`) | ✅ Configurada |
-| **`NEXT_PUBLIC_SUPABASE_URL`** | Línea 6 de `.env.production.local` (`https://lzmawhowjxgovxewmray.supabase.co`) | ✅ Configurada |
-| **`NEXT_PUBLIC_SUPABASE_ANON_KEY`** | Línea 7 de `.env.production.local` (`eyJhbGciOi...`) | ✅ Configurada |
-| **`SUPABASE_SERVICE_ROLE_KEY`** | Línea 8 de `.env.production.local` (`eyJhbGciOi...`) | ✅ Configurada |
+| Variable | Tipo en Vercel | De dónde sale / Descripción |
+| :--- | :---: | :--- |
+| **`DATABASE_URL`** | **Secret** | Connection string a PostgreSQL (Pooler Supabase, puerto 6543) |
+| **`NEXT_PUBLIC_SUPABASE_URL`** | **Config** | URL del proyecto Supabase (`https://<ref>.supabase.co`) |
+| **`NEXT_PUBLIC_SUPABASE_ANON_KEY`** | **Config** | Llave pública anónima de Supabase (JWT público) |
+| **`SUPABASE_SERVICE_ROLE_KEY`** | **Secret** | Llave administrativa de servicio Supabase (acceso total con bypass RLS) |
 
 ---
 
-## 2. Super-Administrador del SaaS (/superadmin)
-> *Controla quién tiene acceso al panel global de RestauraCore.*
+## 2. Super-Administrador del SaaS (/superadmin) y Respaldo Administrativo
 
-| Variable | Qué poner | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`SUPER_ADMIN_EMAILS`** | Correo del dueño del SaaS (ejemplo: `berna241190@hotmail.com`). Si son varios, separados por coma. | ⚠️ **Requiere verificar valor exacto y redeploy** |
+| Variable | Tipo en Vercel | Qué poner / Rol del sistema |
+| :--- | :---: | :--- |
+| **`SUPER_ADMIN_EMAILS`** | **Config** | Correo(s) autorizados para acceder al panel `/superadmin` (ejemplo: `berna241190@hotmail.com`). Si son varios, separados por coma. |
+| **`GERENTE_EMAIL`** | **Config** | Correo administrativo global del sistema. **Rol:** Respaldo administrativo de emergencia (fallback si un restaurante no tiene configurado `email_alertas` ni usuarios dueños vinculados, o destinatario de tickets de soporte global). **NUNCA** recibe las alertas operativas cotidianas de los restaurantes. |
 
 ---
 
-## 3. Inteligencia Artificial & Telegram
-> *Copia estos valores desde tus credenciales de Telegram y Anthropic.*
+## 3. Inteligencia Artificial & Telegram Bot
+> *Credenciales para generación de predicciones y notificaciones multicanal.*
 
-| Variable | Qué poner / De dónde sale | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`ANTHROPIC_API_KEY`** | Clave de API de Anthropic | ✅ Configurada |
-| **`TELEGRAM_BOT_TOKEN`** | Token del bot de Telegram entregado por BotFather | ⚠️ Pendiente rotación |
-| **`NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`** | Username del bot (ej. `RestauraninverBot`) | ⚠️ Requiere verificar |
-| **`TELEGRAM_WEBHOOK_SECRET`** | Cadena secreta larga y aleatoria para validar updates de Telegram (`X-Telegram-Bot-Api-Secret-Token`) | ⚠️ **Requerida para el webhook** |
-| **`TELEGRAM_CHAT_ID_GERENTE`** | Chat ID del gerente/dueño para alertas directas | ✅ Configurada |
+| Variable | Tipo en Vercel | Qué poner / Descripción |
+| :--- | :---: | :--- |
+| **`ANTHROPIC_API_KEY`** | **Secret** | Clave de API de Anthropic (Claude 3.5 Sonnet para predicción de demanda) |
+| **`TELEGRAM_BOT_TOKEN`** | **Secret** | Token secreto del bot entregado por `@BotFather` |
+| **`TELEGRAM_BOT_USERNAME`** | **Config** | Username del bot en Telegram (ej. `RestauraninverBot`) para generación de enlaces |
+| **`NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`** | **Config** | Mismo username expuesto al frontend para códigos QR y enlaces de vinculación |
+| **`TELEGRAM_WEBHOOK_SECRET`** | **Secret** | Cadena aleatoria secreta para validar updates del bot mediante el header `X-Telegram-Bot-Api-Secret-Token` |
+| **`TELEGRAM_CHAT_ID_GERENTE`** | **Config** | Chat ID del administrador para alertas técnicas globales |
 
 ---
 
 ## 4. Stripe (Suscripciones SaaS)
-> *Valores de Stripe para cobros y planes.*
 
-| Variable | Valor sugerido | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`STRIPE_SECRET_KEY`** | Tu clave de Stripe (`sk_live_...` o `sk_test_...`) | ✅ Configurada |
-| **`STRIPE_PRICE_BASICO`** | Price ID plan Básico | ✅ Configurada |
-| **`STRIPE_PRICE_PRO`** | Price ID plan Pro | ✅ Configurada |
-| **`STRIPE_PRICE_ENTERPRISE`** | Price ID plan Enterprise | ✅ Configurada |
-
----
-
-## 5. Seguridad Interna & URLs
-> *Tokens para proteger cron jobs y webhooks.*
-
-| Variable | Qué poner | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`CRON_SECRET`** | Token seguro para proteger los endpoints cron | ✅ Configurada |
-| **`WEBHOOK_SECRET`** | Token seguro para webhooks internos | ✅ Configurada |
-| **`TELEGRAM_WEBHOOK_SECRET`** | Token secreto configurado en el webhook de Telegram (`secret_token`) | ⚠️ **Configurar en Vercel** |
-| **`NEXT_PUBLIC_APP_URL`** | URL canónica de producción en Vercel | ✅ Configurada |
+| Variable | Tipo en Vercel | Qué poner |
+| :--- | :---: | :--- |
+| **`STRIPE_SECRET_KEY`** | **Secret** | Clave secreta de Stripe (`sk_live_...` para cobros reales) |
+| **`STRIPE_PRICE_BASICO`** | **Config** | Price ID del Plan Básico (`price_...`) |
+| **`STRIPE_PRICE_PRO`** | **Config** | Price ID del Plan Pro (`price_...`) |
+| **`STRIPE_PRICE_ENTERPRISE`** | **Config** | Price ID del Plan Enterprise (`price_...`) |
+| **`STRIPE_WEBHOOK_SECRET`** | **Secret** | Secreto de firma del endpoint webhook (`whsec_...`) |
 
 ---
 
-## 6. Cloudflare Turnstile (Anti-Bot en /registro)
-> *Protección invisible contra registros automatizados.*
+## 5. Stripe en Modo Live (Directrices de Configuración)
 
-| Variable | Qué poner | Estado en Vercel Production |
-| :--- | :--- | :--- |
-| **`NEXT_PUBLIC_TURNSTILE_SITE_KEY`** | Site Key pública (para pruebas: `1x00000000000000000000AA`) | ⚠️ Verificar si ya fue ingresada |
-| **`TURNSTILE_SECRET_KEY`** | Secret Key privada (para pruebas: `1x0000000000000000000000000000000AA`) | ⚠️ Verificar si ya fue ingresada |
+1. **Recreación de Catálogo por Modo:** En Stripe, los productos y precios no se comparten entre modo Test y modo Live. Se deben crear los productos (Básico, Pro, Enterprise) en el Dashboard de Stripe en **modo Live**, generando nuevos IDs de precio (`price_...`).
+2. **Nuevos Price IDs:** Reemplazar en Vercel Production las variables `STRIPE_PRICE_BASICO`, `STRIPE_PRICE_PRO` y `STRIPE_PRICE_ENTERPRISE` con los identificadores generados en modo Live.
+3. **Webhook Independiente por Modo:** En el Dashboard de Stripe en modo Live, registrar el endpoint de webhook apuntando a `https://restautom.vercel.app/api/webhooks/stripe`, seleccionando los eventos:
+   - `checkout.session.completed`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   Copiar la clave de firma (`whsec_...`) en `STRIPE_WEBHOOK_SECRET` de Vercel Production.
+4. **Aislamiento Estricto de Entornos:** La clave secreta Live (`sk_live_...`) **NUNCA** debe colocarse en las ramas Preview ni Development. Vercel Preview debe continuar operando con claves Test (`sk_test_...`).
+
+---
+
+## 6. Seguridad Interna, URLs & Anti-Bot
+
+| Variable | Tipo en Vercel | Qué poner |
+| :--- | :---: | :--- |
+| **`CRON_SECRET`** | **Secret** | Token seguro para proteger los endpoints `/api/cron/*` en el header `Authorization: Bearer <CRON_SECRET>` |
+| **`WEBHOOK_SECRET`** | **Secret** | Token seguro para webhooks internos de sincronización |
+| **`NEXT_PUBLIC_APP_URL`** | **Config** | URL canónica de producción: `https://restautom.vercel.app` |
+| **`NEXT_PUBLIC_TURNSTILE_SITE_KEY`** | **Config** | Site Key pública de Cloudflare Turnstile para el formulario `/registro` |
+| **`TURNSTILE_SECRET_KEY`** | **Secret** | Secret Key privada de Cloudflare Turnstile |
 
 ---
 
 ## 7. Variables Opcionales
-* **Resend (Emails transaccionales):** `RESEND_API_KEY` y `RESEND_FROM_EMAIL`. (Si no están, el sistema envía alertas por Telegram).
-* **Upstash Redis:** `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN`. (Si no están, el rate limiting opera en memoria del contenedor).
-* **Stripe Webhook:** `STRIPE_WEBHOOK_SECRET`. (Registrar en Stripe Dashboard apuntando a `https://restauracore.vercel.app/api/webhooks/stripe`).
+
+* **Resend (Emails transaccionales):** `RESEND_API_KEY` (Secret) y `RESEND_FROM_EMAIL` (Config). Si no se configuran, las notificaciones críticas se despachan vía Telegram.
+* **Upstash Redis:** `UPSTASH_REDIS_REST_URL` (Config) y `UPSTASH_REDIS_REST_TOKEN` (Secret). Si no se configuran, el rate limiting opera con almacén en memoria en el contenedor.
+
+---
+
+## 8. Cron Jobs y Cobertura de Zonas Horarias
+
+Configurados en `vercel.json`:
+```json
+{
+  "crons": [
+    { "path": "/api/cron/prediccion-demanda", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/reporte-diario", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/recordatorio-trial", "schedule": "0 14 * * *" }
+  ]
+}
+```
+
+- **`reporte-diario` (`0 5 * * *` = 05:00 UTC):**
+  - El handler valida que la hora local del restaurante sea exactamente las 23:00 (`horaLocal === 23`).
+  - Con la frecuencia actual de 1 ejecución diaria, **únicamente atiende a restaurantes en zona horaria UTC-6** (`America/Mexico_City`), donde las 05:00 UTC son las 23:00 locales.
+  - Restaurantes en UTC-7 (Hermosillo/Mazatlán, 22:00 locales), UTC-8 (Tijuana, 21:00 locales) o UTC-5 (Cancún, 00:00 locales) no son procesados por omisión de horario.
+  - **Requisito para múltiples zonas horarias:** Para atender otras zonas respetando el corte de las 23:00 locales se requiere ejecución horaria (`0 * * * *`). Esto requiere el **plan Pro de Vercel** (el plan Hobby solo permite ejecuciones con frecuencia diaria).
+- **`recordatorio-trial` (`0 14 * * *` = 14:00 UTC / 08:00 CDMX):**
+  - Se ejecuta diariamente. Calcula los días restantes (2 días y 1 día) utilizando la fecha local del restaurante (`YYYY-MM-DD`).
+  - NO envía recordatorios a cuentas de trial vencidas.
+  - Se apoya en la restricción atómica `UNIQUE(restaurante_id, dias_restantes)` en `recordatorios_trial_enviados` para garantizar idempotencia y evitar envíos duplicados.
+- **`prediccion-demanda` (`0 3 * * *` = 03:00 UTC / 21:00 CDMX):**
+  - Ejecución diaria para proyección de compras e insumos del día siguiente con IA. Requiere `ANTHROPIC_API_KEY`.
