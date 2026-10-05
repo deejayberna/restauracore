@@ -1,6 +1,8 @@
 -- ==============================================================================
--- Migración 0008: Sincronización de Producción (Idempotente y Estrictamente Aditiva)
+-- Migración 0010: Sincronización de Producción (Idempotente, Aditiva y Transaccional)
 -- ==============================================================================
+
+BEGIN;
 
 -- 1. Columna 'activo' en categorias_menu
 ALTER TABLE "public"."categorias_menu"
@@ -81,3 +83,5 @@ BEGIN
       );
   END IF;
 END $$;
+
+COMMIT;
