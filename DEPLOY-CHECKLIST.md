@@ -26,14 +26,16 @@ Asegúrate de marcar la casilla **Production** y hacer un **Redeploy** para que 
 
 ---
 
-## 3. Inteligencia Artificial & Alertas
-> *Copia estos valores directamente desde tu archivo `.env.local`.*
+## 3. Inteligencia Artificial & Telegram
+> *Copia estos valores desde tus credenciales de Telegram y Anthropic.*
 
-| Variable | De dónde sale | Estado en Vercel Production |
+| Variable | Qué poner / De dónde sale | Estado en Vercel Production |
 | :--- | :--- | :--- |
-| **`ANTHROPIC_API_KEY`** | Clave de Anthropic en `.env.local` (`sk-ant-api03-...`) | ✅ Configurada |
-| **`TELEGRAM_BOT_TOKEN`** | Token de bot en `.env.local` (`8951901783:AAFAe3B...`) | ✅ Configurada |
-| **`TELEGRAM_CHAT_ID_GERENTE`** | Chat ID en `.env.local` (`423720063`) | ✅ Configurada |
+| **`ANTHROPIC_API_KEY`** | Clave de API de Anthropic | ✅ Configurada |
+| **`TELEGRAM_BOT_TOKEN`** | Token del bot de Telegram entregado por BotFather | ⚠️ Pendiente rotación |
+| **`NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`** | Username del bot (ej. `RestauraninverBot`) | ⚠️ Requiere verificar |
+| **`TELEGRAM_WEBHOOK_SECRET`** | Cadena secreta larga y aleatoria para validar updates de Telegram (`X-Telegram-Bot-Api-Secret-Token`) | ⚠️ **Requerida para el webhook** |
+| **`TELEGRAM_CHAT_ID_GERENTE`** | Chat ID del gerente/dueño para alertas directas | ✅ Configurada |
 
 ---
 
@@ -43,9 +45,9 @@ Asegúrate de marcar la casilla **Production** y hacer un **Redeploy** para que 
 | Variable | Valor sugerido | Estado en Vercel Production |
 | :--- | :--- | :--- |
 | **`STRIPE_SECRET_KEY`** | Tu clave de Stripe (`sk_live_...` o `sk_test_...`) | ✅ Configurada |
-| **`STRIPE_PRICE_BASICO`** | `price_1UGtAnITGlKs5t7RzvqHoJXi` (de `.env.local`) | ✅ Configurada |
-| **`STRIPE_PRICE_PRO`** | `price_1UGtAoITGlKs5t7RnZo1l7rx` (de `.env.local`) | ✅ Configurada |
-| **`STRIPE_PRICE_ENTERPRISE`** | `price_1UGtAoITGlKs5t7RBUG4NOt0` (de `.env.local`) | ✅ Configurada |
+| **`STRIPE_PRICE_BASICO`** | Price ID plan Básico | ✅ Configurada |
+| **`STRIPE_PRICE_PRO`** | Price ID plan Pro | ✅ Configurada |
+| **`STRIPE_PRICE_ENTERPRISE`** | Price ID plan Enterprise | ✅ Configurada |
 
 ---
 
@@ -56,7 +58,8 @@ Asegúrate de marcar la casilla **Production** y hacer un **Redeploy** para que 
 | :--- | :--- | :--- |
 | **`CRON_SECRET`** | Token seguro para proteger los endpoints cron | ✅ Configurada |
 | **`WEBHOOK_SECRET`** | Token seguro para webhooks internos | ✅ Configurada |
-| **`NEXT_PUBLIC_APP_URL`** | `https://restauracore.vercel.app` | ✅ Configurada |
+| **`TELEGRAM_WEBHOOK_SECRET`** | Token secreto configurado en el webhook de Telegram (`secret_token`) | ⚠️ **Configurar en Vercel** |
+| **`NEXT_PUBLIC_APP_URL`** | URL canónica de producción en Vercel | ✅ Configurada |
 
 ---
 

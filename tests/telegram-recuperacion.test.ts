@@ -17,6 +17,8 @@ import {
   notificarPedidoCanceladoTelegram,
 } from "@/lib/telegram-clientes";
 import { tienePermisoPlan } from "@/lib/planes";
+import { NextRequest } from "next/server";
+import { POST as telegramWebhookPOST } from "@/app/api/webhooks/telegram-bot/route";
 
 describe("Retención y Recuperación de Clientes vía Telegram", () => {
   const originalEnv = process.env;
@@ -357,5 +359,62 @@ describe("Retención y Recuperación de Clientes vía Telegram", () => {
     expect(tienePermisoPlan("pro", "telegram_recuperacion")).toBe(false);
     expect(tienePermisoPlan("enterprise", "telegram_recuperacion")).toBe(true);
     expect(tienePermisoPlan(null, "telegram_recuperacion")).toBe(false);
+  });
+
+  it("8. Seguridad del Webhook: Validación de X-Telegram-Bot-Api-Secret-Token", async () => {
+    process.env.TELEGRAM_WEBHOOK_SECRET = "super_secret_webhook_token_123";
+
+    // 1. Sin header -> 401
+    const reqSinHeader = new NextRequest("http://localhost:3000/api/webhooks/telegram-bot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { chat: { id: 12345 }, text: "hola" } }),
+    });
+    const resSinHeader = await telegramWebhookPOST(reqSinHeader);
+    expect(resSinHeader.status).toBe(401);
+    const bodySinHeader = await resSinHeader.json();
+    expect(bodySinHeader.error).toBe("No autorizado");
+
+    // 2. Header incorrecto -> 401
+    const reqHeaderMal = new NextRequest("http://localhost:3000/api/webhooks/telegram-bot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "token_invalido_xyz",
+      },
+      body: JSON.stringify({ message: { chat: { id: 12345 }, text: "hola" } }),
+    });
+    const resHeaderMal = await telegramWebhookPOST(reqHeaderMal);
+    expect(resHeaderMal.status).toBe(401);
+    const bodyHeaderMal = await resHeaderMal.json();
+    expect(bodyHeaderMal.error).toBe("No autorizado");
+
+    // 3. Variable no configurada en entorno -> 401
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    const reqSinEnv = new NextRequest("http://localhost:3000/api/webhooks/telegram-bot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "super_secret_webhook_token_123",
+      },
+      body: JSON.stringify({ message: { chat: { id: 12345 }, text: "hola" } }),
+    });
+    const resSinEnv = await telegramWebhookPOST(reqSinEnv);
+    expect(resSinEnv.status).toBe(401);
+
+    // 4. Header correcto -> 200
+    process.env.TELEGRAM_WEBHOOK_SECRET = "super_secret_webhook_token_123";
+    const reqCorrecto = new NextRequest("http://localhost:3000/api/webhooks/telegram-bot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "super_secret_webhook_token_123",
+      },
+      body: JSON.stringify({ message: { chat: { id: 12345 }, text: "hola" } }),
+    });
+    const resCorrecto = await telegramWebhookPOST(reqCorrecto);
+    expect(resCorrecto.status).toBe(200);
+    const bodyCorrecto = await resCorrecto.json();
+    expect(bodyCorrecto.ok).toBe(true);
   });
 });

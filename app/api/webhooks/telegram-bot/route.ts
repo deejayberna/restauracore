@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { procesarStartTelegram } from "@/lib/telegram-clientes";
 
 export async function POST(req: NextRequest) {
+  const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+  if (!webhookSecret || secretHeader !== webhookSecret) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
   try {
     const update = await req.json();
 
     const message = update?.message;
-    if (!message || !message.text) {
+    if (!message || !message.text || !message.chat?.id) {
       return NextResponse.json({ ok: true });
     }
 

@@ -7,6 +7,12 @@ if (!token) {
   process.exit(1);
 }
 
+const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+if (!secretToken) {
+  console.error("TELEGRAM_WEBHOOK_SECRET no encontrado en el entorno.");
+  process.exit(1);
+}
+
 const webhookUrl = "https://restautom.vercel.app/api/webhooks/telegram-bot";
 
 async function setWebhook() {
@@ -16,6 +22,7 @@ async function setWebhook() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       url: webhookUrl,
+      secret_token: secretToken,
       allowed_updates: ["message"],
       drop_pending_updates: false,
     }),
