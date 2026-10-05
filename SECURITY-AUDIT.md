@@ -98,4 +98,20 @@ A partir de la presente auditoría:
 2. Toda migración debe ejecutarse y validarse primero en Desarrollo (`.env.local`), verificando la suite de pruebas completa (`npx vitest run`) y la compilación (`npm run build`).
 3. **Autorización Requerida:** La ejecución contra `.env.production.local` requerirá confirmación y visto bueno explícito del usuario antes de ser disparada.
 
+---
 
+## 6. Content Security Policy (CSP) y Deuda Técnica de Endurecimiento
+
+**Fecha de Actualización:** 05 de Octubre de 2026
+
+### 6.1 Corrección de Orígenes para Cloudflare Turnstile
+- Se auditaron mediante Playwright las rutas públicas de la aplicación (`/`, `/precios`, `/registro`, `/login`, y rutas de menú QR).
+- Se detectó que el widget de Cloudflare Turnstile en `/registro` era bloqueado al cargar `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit`.
+- **Acción:** Se agregó el origen `https://challenges.cloudflare.com` a las directivas `script-src` y `frame-src` en `next.config.ts`. No se ampliaron orígenes adicionales no requeridos.
+
+### 6.2 Deuda Técnica de Endurecimiento (CSP con Nonces)
+- **Estado Actual:**
+  - `script-src` continúa permitiendo `'unsafe-inline'` y `'unsafe-eval'`.
+  - `connect-src` continúa permitiendo comodines globales (`https:`, `wss:`, `ws:`).
+- **Justificación y Plan de Mitigación:** Esta configuración se mantiene explícitamente como **deuda de endurecimiento** para habilitar la hidratación de componentes cliente de Next.js y scripts de terceros (Stripe, Cloudflare Turnstile) sin bloquear la funcionalidad operativa.
+- **Acción Futura:** En una fase posterior se implementará una política CSP estricta basada en nonces criptográficos generados dinámicamente por request mediante middleware (`nonce-{random}`), eliminando `'unsafe-inline'` y acotando los orígenes permitidos en `connect-src`.
