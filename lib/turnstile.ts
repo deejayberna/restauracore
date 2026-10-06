@@ -30,20 +30,22 @@ export async function validarTurnstileToken(
   const secretKey = process.env.TURNSTILE_SECRET_KEY;
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const isProduction = process.env.NODE_ENV === "production";
-  const isVercelProd = process.env.VERCEL_ENV === "production";
+  const esProduccionReal =
+    process.env.VERCEL_ENV === "production" ||
+    (isProduction && process.env.VITEST === undefined);
 
-  // En producción real de Vercel (VERCEL_ENV === "production"), SKIP_CAPTCHA_IN_TESTS
-  // debe ignorarse completamente y registrar un error en logs sin imprimir valores.
+  // En producción real (VERCEL_ENV === "production" o NODE_ENV === "production" sin VITEST),
+  // SKIP_CAPTCHA_IN_TESTS debe ignorarse completamente y registrar un error en logs sin imprimir valores.
   let skipCaptcha = Boolean(process.env.SKIP_CAPTCHA_IN_TESTS);
-  if (isVercelProd && skipCaptcha) {
+  if (esProduccionReal && skipCaptcha) {
     console.error(
-      "[Turnstile] ERROR DE SEGURIDAD: SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real de Vercel (VERCEL_ENV === 'production'). Forzando verificación."
+      "[Turnstile] ERROR DE SEGURIDAD: SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real. Forzando verificación."
     );
     skipCaptcha = false;
   }
 
-  // En producción real de Vercel nunca se omite la verificación por entorno de prueba
-  const isTest = !isVercelProd && (process.env.VITEST !== undefined || skipCaptcha);
+  // En producción real nunca se omite la verificación por entorno de prueba
+  const isTest = !esProduccionReal && (process.env.VITEST !== undefined || skipCaptcha);
 
   // 1. En entornos de prueba / dev sin secret configurado:
   if (!secretKey) {

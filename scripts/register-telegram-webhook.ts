@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
+const envPath = process.env.DOTENV_CONFIG_PATH || ".env.local";
+dotenv.config({ path: envPath });
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -13,7 +14,8 @@ if (!secretToken) {
   process.exit(1);
 }
 
-const webhookUrl = "https://restautom.vercel.app/api/webhooks/telegram-bot";
+const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://restautom.vercel.app").replace(/\/+$/, "");
+const webhookUrl = `${baseUrl}/api/webhooks/telegram-bot`;
 
 async function setWebhook() {
   console.log(`Configurando webhook a: ${webhookUrl}`);

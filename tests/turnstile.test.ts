@@ -127,7 +127,7 @@ describe("Cloudflare Turnstile Guard", () => {
     });
   });
 
-  describe("4. VERCEL_ENV=production ignora SKIP_CAPTCHA_IN_TESTS", () => {
+  describe("4. Ignorar SKIP_CAPTCHA_IN_TESTS en producción real", () => {
     it("producción con VERCEL_ENV=production y la bandera activa no omite la verificación", async () => {
       (process.env as any).NODE_ENV = "production";
       process.env.VERCEL_ENV = "production";
@@ -143,7 +143,7 @@ describe("Cloudflare Turnstile Guard", () => {
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/completa la verificación de seguridad/i);
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real de Vercel/i)
+        expect.stringMatching(/SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real/i)
       );
 
       // Garantizar que no se imprimen valores de claves en los logs
@@ -151,6 +151,33 @@ describe("Cloudflare Turnstile Guard", () => {
         const loggedText = call.join(" ");
         expect(loggedText).not.toContain("0x4AAAAAAAValidSecretKey123");
         expect(loggedText).not.toContain("0x4AAAAAAAValidSiteKey123");
+      }
+    });
+
+    it("producción con NODE_ENV=production y VITEST no definido con SKIP_CAPTCHA_IN_TESTS no omite la verificación", async () => {
+      (process.env as any).NODE_ENV = "production";
+      delete process.env.VERCEL_ENV;
+      delete process.env.VITEST;
+      process.env.SKIP_CAPTCHA_IN_TESTS = "true";
+      process.env.TURNSTILE_SECRET_KEY = "0x4AAAAAAAValidSecretKey456";
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAAAValidSiteKey456";
+
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Sin token, la verificación NO debe omitirse y debe fallar exigiendo captcha
+      const res = await validarTurnstileToken(null, "127.0.0.1");
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/completa la verificación de seguridad/i);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real/i)
+      );
+
+      // Garantizar que no se imprimen valores de claves en los logs
+      for (const call of consoleErrorSpy.mock.calls) {
+        const loggedText = call.join(" ");
+        expect(loggedText).not.toContain("0x4AAAAAAAValidSecretKey456");
+        expect(loggedText).not.toContain("0x4AAAAAAAValidSiteKey456");
       }
     });
   });

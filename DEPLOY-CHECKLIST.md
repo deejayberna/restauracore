@@ -156,7 +156,7 @@ Cuando el SaaS pase de `restautom.vercel.app` a un dominio personalizado propio 
    - En el Dashboard de Cloudflare -> Turnstile -> editar widget:
      - Agregar el nuevo dominio a la lista de dominios autorizados.
 6. **Re-registro del Webhook de Telegram:**
-   - Actualizar la URL de destino en `scripts/register-telegram-webhook.ts` hacia `https://tudominio.com/api/webhooks/telegram-bot` y ejecutar el script (`npx tsx scripts/register-telegram-webhook.ts`). El script lee automáticamente `TELEGRAM_BOT_TOKEN` y `TELEGRAM_WEBHOOK_SECRET` para registrar el webhook ante Telegram de forma segura.
+   - Con `NEXT_PUBLIC_APP_URL` configurado con el nuevo dominio (o pasándolo en el entorno), ejecutar `npx tsx scripts/register-telegram-webhook.ts`. El script construye automáticamente la URL hacia `/api/webhooks/telegram-bot` usando `NEXT_PUBLIC_APP_URL` y lee `TELEGRAM_BOT_TOKEN` y `TELEGRAM_WEBHOOK_SECRET` para registrar el webhook ante Telegram de forma segura.
 7. **Email Transaccional (Resend o SMTP propio en Supabase):**
    - Configurar y verificar el dominio propio en Resend (registros SPF, DKIM, DMARC, MX) y actualizar `RESEND_FROM_EMAIL` (ej. `noreply@tudominio.com`), o configurar SMTP propio con dicho dominio en Supabase Auth.
 8. **CSP (Content Security Policy):**
