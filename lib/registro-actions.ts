@@ -37,176 +37,289 @@ function hashPassword(password: string): string {
   return `${salt}:${hash}`;
 }
 
+function sanitizarEmailParaLog(email?: string): string {
+  if (!email) return "sin-email";
+  const partes = email.split("@");
+  if (partes.length !== 2) return "***";
+  const user = partes[0];
+  const dom = partes[1];
+  const ofuscado = user.length > 2 ? `${user.substring(0, 2)}***` : `${user[0] || ""}***`;
+  return `${ofuscado}@${dom}`;
+}
+
+function logErrorRegistro(paso: string, err: any, email?: string) {
+  const errorName = err?.name || "Error";
+  const errorMessage = err?.message || String(err);
+  console.error(`[RegistroDirecto][${paso}]`, {
+    tag: "REGISTRO_ERROR",
+    paso,
+    errorName,
+    errorMessage,
+    email: sanitizarEmailParaLog(email),
+  });
+}
+
 /**
  * Registro directo de autoservicio sin tarjeta (14 Días de Prueba Gratuita).
  * Crea el usuario, restaurante y asignación con trial activo de 14 días.
  * Aplica Rate Limiting, Captcha Turnstile y exige confirmación de correo electrónico.
  */
 export async function registrarRestauranteDirectoAction(input: RegistroInput) {
-  // 0. Rate limiting perimetral por IP (máximo 3 registros por hora)
-  let ip = "127.0.0.1";
+  let supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | null = null;
+  let createdAuthUserId: string | null = null;
+  let cleanEmail = "";
+
   try {
-    const h = await headers();
-    ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "127.0.0.1";
-  } catch {
-    // Contexto sin headers de request (ej. tests unitarios)
-  }
-
-  const rateCheck = await checkRateLimitRegistro(ip);
-  if (!rateCheck.success) {
-    return {
-      error: "Demasiados intentos de registro desde esta conexión. Por favor intenta más tarde (máximo 3 registros por hora).",
-    };
-  }
-
-  const valid = RegistroSchema.safeParse(input);
-  if (!valid.success) {
-    return { error: valid.error.issues[0].message };
-  }
-
-  const { nombreRestaurante, direccion, timezone, nombreDueno, email, password, plan, turnstileToken } = valid.data;
-
-  // 0.1 Validación de Cloudflare Turnstile
-  const turnstileCheck = await validarTurnstileToken(turnstileToken, ip);
-  if (!turnstileCheck.success) {
-    return { error: turnstileCheck.error || "Fallo en la verificación de seguridad (Captcha)." };
-  }
-
-  const cleanEmail = email.toLowerCase().trim();
-
-  // 1. Verificar si el usuario ya existe en nuestra BD
-  const usuarioExistente = await db.query.usuarios.findFirst({
-    where: eq(usuarios.email, cleanEmail),
-  });
-
-  if (usuarioExistente) {
-    return { error: "Ya existe una cuenta con este correo electrónico. Inicia sesión para continuar." };
-  }
-
-  // 2. Crear usuario en Supabase Auth con confirmación requerida (email_confirm: false)
-  const supabaseAdmin = createSupabaseAdminClient();
-  let authUserId: string;
-
-  const authUserRes = await supabaseAdmin.auth.admin.createUser({
-    email: cleanEmail,
-    password: password,
-    email_confirm: false, // <-- Exige verificación obligatoria para nuevos registros
-    user_metadata: {
-      nombre: nombreDueno.trim(),
-    },
-  });
-
-  if (authUserRes.error) {
-    const listRes = await supabaseAdmin.auth.admin.listUsers();
-    const existing = listRes.data.users.find((u) => u.email === cleanEmail);
-    if (existing) {
-      authUserId = existing.id;
-      await supabaseAdmin.auth.admin.updateUserById(existing.id, { password });
-    } else {
-      return { error: `Error al registrar usuario: ${authUserRes.error.message}` };
+    // 0. Rate limiting perimetral por IP (máximo 3 registros por hora)
+    let ip = "127.0.0.1";
+    try {
+      const h = await headers();
+      ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "127.0.0.1";
+    } catch {
+      // Contexto sin headers de request (ej. tests unitarios)
     }
-  } else {
-    authUserId = authUserRes.data.user.id;
-  }
 
-  // 3. Enviar correo de confirmación de cuenta vía Supabase Auth
-  const { error: resendError } = await supabaseAdmin.auth.resend({
-    type: "signup",
-    email: cleanEmail,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?confirmado=true`,
-    },
-  });
+    let rateCheck;
+    try {
+      rateCheck = await checkRateLimitRegistro(ip);
+    } catch (rateErr: any) {
+      logErrorRegistro("RATE_LIMIT", rateErr, input?.email);
+      return {
+        error: "El servicio no está disponible temporalmente. Por favor intenta más tarde.",
+      };
+    }
 
-  if (resendError) {
-    console.error("[RegistroDirecto] Error crítico al solicitar envío de correo de confirmación:", resendError);
-    await supabaseAdmin.auth.admin.deleteUser(authUserId);
-    return {
-      error: `No se pudo enviar el correo de confirmación: ${resendError.message}. Por favor verifica tu correo o intenta de nuevo más tarde.`,
-    };
-  }
+    if (!rateCheck.success) {
+      return {
+        error: "Demasiados intentos de registro desde esta conexión. Por favor intenta más tarde (máximo 3 registros por hora).",
+      };
+    }
 
-  // 4. 14 días exactos de prueba gratuita
-  const fechaFinTrial = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-  let nuevoRestauranteId = "";
-  let nuevoUsuarioId = "";
+    const valid = RegistroSchema.safeParse(input);
+    if (!valid.success) {
+      return { error: valid.error.issues[0]?.message || "Datos de registro inválidos." };
+    }
 
-  try {
-    await db.transaction(async (tx) => {
-      // A. Crear o asegurar usuario
-      let [u] = await tx.select().from(usuarios).where(eq(usuarios.email, cleanEmail)).limit(1);
-      if (!u) {
-        [u] = await tx
-          .insert(usuarios)
-          .values({
-            auth_id: authUserId,
-            email: cleanEmail,
-            nombre: nombreDueno.trim(),
-            activo: true,
-          })
-          .returning();
-      } else {
-        [u] = await tx
-          .update(usuarios)
-          .set({ auth_id: authUserId, nombre: nombreDueno.trim() })
-          .where(eq(usuarios.id, u.id))
-          .returning();
-      }
-      nuevoUsuarioId = u.id;
+    const { nombreRestaurante, direccion, timezone, nombreDueno, email, password, plan, turnstileToken } = valid.data;
+    cleanEmail = email.toLowerCase().trim();
 
-      // B. Crear restaurante con trial activo de 14 días sin Stripe requerido
-      const [r] = await tx
-        .insert(restaurantes)
-        .values({
-          nombre: nombreRestaurante.trim(),
-          direccion: direccion?.trim() || null,
-          timezone,
-          plan: plan as Plan,
-          stripe_customer_id: null,
-          stripe_subscription_id: null,
-          estado_suscripcion: "trial",
-          fecha_fin_trial: fechaFinTrial,
-        })
-        .returning();
-      nuevoRestauranteId = r.id;
+    // 0.1 Validación de Cloudflare Turnstile
+    let turnstileCheck;
+    try {
+      turnstileCheck = await validarTurnstileToken(turnstileToken, ip);
+    } catch (turnstileErr: any) {
+      logErrorRegistro("TURNSTILE", turnstileErr, cleanEmail);
+      return { error: "Error de verificación de seguridad. Por favor intenta de nuevo." };
+    }
 
-      // C. Vincular dueño
-      await tx.insert(usuarioRestaurantes).values({
-        usuario_id: u.id,
-        restaurante_id: r.id,
-        rol: "dueno",
-        activo: true,
-        invitacion_pendiente: false,
+    if (!turnstileCheck.success) {
+      return { error: turnstileCheck.error || "Fallo en la verificación de seguridad (Captcha)." };
+    }
+
+    // 1. Verificar si el usuario ya existe en nuestra BD
+    let usuarioExistente;
+    try {
+      usuarioExistente = await db.query.usuarios.findFirst({
+        where: eq(usuarios.email, cleanEmail),
       });
+    } catch (dbQueryErr: any) {
+      logErrorRegistro("VERIFICAR_USUARIO_EXISTENTE", dbQueryErr, cleanEmail);
+      return { error: "No fue posible verificar tus datos en este momento. Por favor intenta de nuevo más tarde." };
+    }
 
-      // D. Asentar en log de auditoría
-      await tx.insert(logAuditoria).values({
-        restaurante_id: r.id,
-        usuario_id: u.id,
-        accion: "REGISTRO_RESTAURANTE_DIRECTO_TRIAL",
-        valores_nuevos: {
-          plan,
-          trial_dias: 14,
-          email: cleanEmail,
-          fecha_fin_trial: fechaFinTrial.toISOString(),
+    if (usuarioExistente) {
+      return { error: "Ya existe una cuenta con este correo electrónico. Inicia sesión para continuar." };
+    }
+
+    // 2. Inicializar cliente y crear usuario en Supabase Auth
+    try {
+      supabaseAdmin = createSupabaseAdminClient();
+    } catch (adminClientErr: any) {
+      logErrorRegistro("CLIENTE_AUTH", adminClientErr, cleanEmail);
+      return { error: "El servicio de autenticación no está disponible en este momento. Por favor intenta más tarde." };
+    }
+
+    let authUserId: string;
+    let authUserRes;
+    try {
+      authUserRes = await supabaseAdmin.auth.admin.createUser({
+        email: cleanEmail,
+        password: password,
+        email_confirm: false, // <-- Exige verificación obligatoria para nuevos registros
+        user_metadata: {
+          nombre: nombreDueno.trim(),
         },
       });
-    });
+    } catch (authCreateErr: any) {
+      logErrorRegistro("CREAR_USUARIO_AUTH", authCreateErr, cleanEmail);
+      return { error: "Error al crear la cuenta de usuario. Por favor intenta de nuevo más tarde." };
+    }
 
+    if (authUserRes.error) {
+      try {
+        const listRes = await supabaseAdmin.auth.admin.listUsers();
+        const existing = listRes?.data?.users?.find((u) => u.email === cleanEmail);
+        if (existing) {
+          authUserId = existing.id;
+          await supabaseAdmin.auth.admin.updateUserById(existing.id, { password });
+        } else {
+          logErrorRegistro("CREAR_USUARIO_AUTH", authUserRes.error, cleanEmail);
+          return { error: `Error al registrar usuario: ${authUserRes.error.message}` };
+        }
+      } catch (authLookupErr: any) {
+        logErrorRegistro("RECUPERAR_USUARIO_AUTH", authLookupErr, cleanEmail);
+        return { error: "Error al procesar el usuario existente. Por favor intenta de nuevo." };
+      }
+    } else {
+      if (!authUserRes.data?.user?.id) {
+        logErrorRegistro("CREAR_USUARIO_AUTH", new Error("Respuesta de Auth sin user ID"), cleanEmail);
+        return { error: "Error al generar la credencial de acceso. Por favor intenta más tarde." };
+      }
+      authUserId = authUserRes.data.user.id;
+      createdAuthUserId = authUserId;
+    }
+
+    // 3. Enviar correo de confirmación de cuenta vía Supabase Auth
+    try {
+      const { error: resendError } = await supabaseAdmin.auth.resend({
+        type: "signup",
+        email: cleanEmail,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?confirmado=true`,
+        },
+      });
+
+      if (resendError) {
+        logErrorRegistro("ENVIAR_CORREO_CONFIRMACION", resendError, cleanEmail);
+        if (createdAuthUserId && supabaseAdmin) {
+          try {
+            await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+          } catch (delErr: any) {
+            logErrorRegistro("ROLLBACK_AUTH", delErr, cleanEmail);
+          }
+          createdAuthUserId = null;
+        }
+        return {
+          error: `No se pudo enviar el correo de confirmación: ${resendError.message}. Por favor verifica tu correo o intenta de nuevo más tarde.`,
+        };
+      }
+    } catch (resendEx: any) {
+      logErrorRegistro("ENVIAR_CORREO_CONFIRMACION", resendEx, cleanEmail);
+      if (createdAuthUserId && supabaseAdmin) {
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+        } catch (delErr: any) {
+          logErrorRegistro("ROLLBACK_AUTH", delErr, cleanEmail);
+        }
+        createdAuthUserId = null;
+      }
+      return {
+        error: "No se pudo enviar el correo de confirmación. Por favor verifica tu correo o intenta de nuevo más tarde.",
+      };
+    }
+
+    // 4. 14 días exactos de prueba gratuita
+    const fechaFinTrial = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    let nuevoRestauranteId = "";
+    let nuevoUsuarioId = "";
+
+    try {
+      await db.transaction(async (tx) => {
+        // A. Crear o asegurar usuario
+        let [u] = await tx.select().from(usuarios).where(eq(usuarios.email, cleanEmail)).limit(1);
+        if (!u) {
+          [u] = await tx
+            .insert(usuarios)
+            .values({
+              auth_id: authUserId,
+              email: cleanEmail,
+              nombre: nombreDueno.trim(),
+              activo: true,
+            })
+            .returning();
+        } else {
+          [u] = await tx
+            .update(usuarios)
+            .set({ auth_id: authUserId, nombre: nombreDueno.trim() })
+            .where(eq(usuarios.id, u.id))
+            .returning();
+        }
+        nuevoUsuarioId = u.id;
+
+        // B. Crear restaurante con trial activo de 14 días sin Stripe requerido
+        const [r] = await tx
+          .insert(restaurantes)
+          .values({
+            nombre: nombreRestaurante.trim(),
+            direccion: direccion?.trim() || null,
+            timezone,
+            plan: plan as Plan,
+            stripe_customer_id: null,
+            stripe_subscription_id: null,
+            estado_suscripcion: "trial",
+            fecha_fin_trial: fechaFinTrial,
+          })
+          .returning();
+        nuevoRestauranteId = r.id;
+
+        // C. Vincular dueño
+        await tx.insert(usuarioRestaurantes).values({
+          usuario_id: u.id,
+          restaurante_id: r.id,
+          rol: "dueno",
+          activo: true,
+          invitacion_pendiente: false,
+        });
+
+        // D. Asentar en log de auditoría
+        await tx.insert(logAuditoria).values({
+          restaurante_id: r.id,
+          usuario_id: u.id,
+          accion: "REGISTRO_RESTAURANTE_DIRECTO_TRIAL",
+          valores_nuevos: {
+            plan,
+            trial_dias: 14,
+            email: cleanEmail,
+            fecha_fin_trial: fechaFinTrial.toISOString(),
+          },
+        });
+      });
+
+      return {
+        success: true,
+        requiereConfirmacion: true,
+        restauranteId: nuevoRestauranteId,
+        duenoId: nuevoUsuarioId,
+        nombreRestaurante,
+        email: cleanEmail,
+        mensaje:
+          "¡Registro completado! Hemos enviado un correo de confirmación a tu cuenta. Revisa tu bandeja de entrada y confirma tu correo para activar tu acceso.",
+      };
+    } catch (err: any) {
+      logErrorRegistro("TRANSACCION_POSTGRES", err, cleanEmail);
+      if (createdAuthUserId && supabaseAdmin) {
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+        } catch (delErr: any) {
+          logErrorRegistro("ROLLBACK_AUTH", delErr, cleanEmail);
+        }
+        createdAuthUserId = null;
+      }
+      return { error: "Error al completar el registro del restaurante. Por favor intenta de nuevo." };
+    }
+  } catch (globalErr: any) {
+    logErrorRegistro("GLOBAL", globalErr, cleanEmail || input?.email);
+    if (createdAuthUserId && supabaseAdmin) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+      } catch (delErr: any) {
+        logErrorRegistro("ROLLBACK_AUTH", delErr, cleanEmail || input?.email);
+      }
+      createdAuthUserId = null;
+    }
     return {
-      success: true,
-      requiereConfirmacion: true,
-      restauranteId: nuevoRestauranteId,
-      duenoId: nuevoUsuarioId,
-      nombreRestaurante,
-      email: cleanEmail,
-      mensaje:
-        "¡Registro completado! Hemos enviado un correo de confirmación a tu cuenta. Revisa tu bandeja de entrada y confirma tu correo para activar tu acceso.",
+      error: "Ocurrió un error inesperado al procesar el registro. Por favor intenta de nuevo más tarde.",
     };
-  } catch (err: any) {
-    console.error("[RegistroDirecto] Error transaccional en PostgreSQL:", err);
-    await supabaseAdmin.auth.admin.deleteUser(authUserId);
-    return { error: err.message || "Error al completar el registro del restaurante." };
   }
 }
 

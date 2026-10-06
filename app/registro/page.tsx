@@ -11,6 +11,8 @@ import {
   Sparkles,
   CheckCircle2,
   Mail,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { PLANES_DETALLE, type Plan } from "@/lib/planes";
 import { registrarRestauranteDirectoAction, type RegistroInput } from "@/lib/registro-actions";
@@ -33,6 +35,7 @@ export default function RegistroPage({
   const [nombreDueno, setNombreDueno] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [confirmacionPendiente, setConfirmacionPendiente] = useState<{
@@ -283,15 +286,31 @@ export default function RegistroPage({
                 <label className="block text-xs font-medium text-neutral-700 mb-1">
                   Contraseña (mínimo 8 caracteres) *
                 </label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-3.5 pr-11 py-2.5 min-h-[44px] rounded-xl border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                    className="absolute right-1 w-11 h-11 flex items-center justify-center text-neutral-400 hover:text-neutral-600 transition-colors focus:outline-none cursor-pointer"
+                    title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -320,13 +339,17 @@ export default function RegistroPage({
             </p>
 
             <div className="py-1">
-              <Turnstile onVerify={(token) => setTurnstileToken(token)} />
+              <Turnstile
+                onVerify={(token) => setTurnstileToken(token)}
+                onError={() => setTurnstileToken(undefined)}
+                onExpire={() => setTurnstileToken(undefined)}
+              />
             </div>
 
             <button
               type="submit"
-              disabled={isPending}
-              className="w-full py-4 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              disabled={isPending || !turnstileToken}
+              className="w-full py-4 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               {isPending ? (
                 <span>Creando cuenta y enviando correo...</span>
