@@ -128,7 +128,10 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
     }
 
     if (usuarioExistente) {
-      return { error: "Ya existe una cuenta con este correo electrónico. Inicia sesión para continuar." };
+      return {
+        error:
+          "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña.",
+      };
     }
 
     // 2. Inicializar cliente y crear usuario en Supabase Auth
@@ -156,28 +159,19 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
     }
 
     if (authUserRes.error) {
-      try {
-        const listRes = await supabaseAdmin.auth.admin.listUsers();
-        const existing = listRes?.data?.users?.find((u) => u.email === cleanEmail);
-        if (existing) {
-          authUserId = existing.id;
-          await supabaseAdmin.auth.admin.updateUserById(existing.id, { password });
-        } else {
-          logErrorRegistro("CREAR_USUARIO_AUTH", authUserRes.error, cleanEmail);
-          return { error: `Error al registrar usuario: ${authUserRes.error.message}` };
-        }
-      } catch (authLookupErr: any) {
-        logErrorRegistro("RECUPERAR_USUARIO_AUTH", authLookupErr, cleanEmail);
-        return { error: "Error al procesar el usuario existente. Por favor intenta de nuevo." };
-      }
-    } else {
-      if (!authUserRes.data?.user?.id) {
-        logErrorRegistro("CREAR_USUARIO_AUTH", new Error("Respuesta de Auth sin user ID"), cleanEmail);
-        return { error: "Error al generar la credencial de acceso. Por favor intenta más tarde." };
-      }
-      authUserId = authUserRes.data.user.id;
-      createdAuthUserId = authUserId;
+      logErrorRegistro("CREAR_USUARIO_AUTH", authUserRes.error, cleanEmail);
+      return {
+        error:
+          "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña.",
+      };
     }
+
+    if (!authUserRes.data?.user?.id) {
+      logErrorRegistro("CREAR_USUARIO_AUTH", new Error("Respuesta de Auth sin user ID"), cleanEmail);
+      return { error: "Error al generar la credencial de acceso. Por favor intenta más tarde." };
+    }
+    authUserId = authUserRes.data.user.id;
+    createdAuthUserId = authUserId;
 
     // 3. Enviar correo de confirmación de cuenta vía Supabase Auth
     try {

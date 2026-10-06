@@ -37,6 +37,7 @@ export default function RegistroPage({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined);
+  const [turnstileIntentos, setTurnstileIntentos] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [confirmacionPendiente, setConfirmacionPendiente] = useState<{
     email: string;
@@ -65,6 +66,8 @@ export default function RegistroPage({
       const res = await registrarRestauranteDirectoAction(input);
       if (res.error) {
         setError(res.error);
+        setTurnstileToken(undefined);
+        setTurnstileIntentos((prev) => prev + 1);
       } else if (res.requiereConfirmacion) {
         setConfirmacionPendiente({
           email: res.email || email,
@@ -340,6 +343,7 @@ export default function RegistroPage({
 
             <div className="py-1">
               <Turnstile
+                key={turnstileIntentos}
                 onVerify={(token) => setTurnstileToken(token)}
                 onError={() => setTurnstileToken(undefined)}
                 onExpire={() => setTurnstileToken(undefined)}

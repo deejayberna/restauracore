@@ -161,7 +161,7 @@ describe("Resiliencia y Manejo de Errores en registrarRestauranteDirectoAction",
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
-  it("4. Usuario ya existente en la base de datos: rechaza sin tocar Auth", async () => {
+  it("4. Usuario ya existente en la base de datos: rechaza sin tocar Auth y devuelve mensaje genérico", async () => {
     vi.spyOn(db.query.usuarios, "findFirst").mockResolvedValueOnce({
       id: "usr-existente-123",
       email: baseInput.email.toLowerCase(),
@@ -171,8 +171,12 @@ describe("Resiliencia y Manejo de Errores en registrarRestauranteDirectoAction",
     const res = await registrarRestauranteDirectoAction(baseInput);
 
     expect(res.success).toBeFalsy();
-    expect(res.error).toMatch(/Ya existe una cuenta con este correo/i);
+    expect(res.error).toBe(
+      "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña."
+    );
     expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockUpdateUserById).not.toHaveBeenCalled();
+    expect(mockListUsers).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
@@ -189,20 +193,60 @@ describe("Resiliencia y Manejo de Errores en registrarRestauranteDirectoAction",
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
-  it("5. Fallo al crear usuario en Supabase Auth: devuelve error sin dejar huérfanos", async () => {
+  it("5. Fallo al crear usuario en Supabase Auth: devuelve error genérico sin llamar a updateUserById ni listUsers", async () => {
     mockCreateUser.mockResolvedValueOnce({
       data: { user: null },
       error: { message: "Contraseña demasiado débil en proveedor de Auth" },
-    });
-    mockListUsers.mockResolvedValueOnce({
-      data: { users: [] },
-      error: null,
     });
 
     const res = await registrarRestauranteDirectoAction(baseInput);
 
     expect(res.success).toBeFalsy();
-    expect(res.error).toContain("Error al registrar usuario");
+    expect(res.error).toBe(
+      "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña."
+    );
+    expect(mockUpdateUserById).not.toHaveBeenCalled();
+    expect(mockListUsers).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it("VULNERABILIDAD PREVENIDA (a): correo existente en Auth sin fila en usuarios: no se llama a updateUserById ni listUsers, no se crea nada y devuelve mensaje genérico", async () => {
+    // Sin fila en usuarios
+    vi.spyOn(db.query.usuarios, "findFirst").mockResolvedValueOnce(undefined);
+    // createUser falla porque ya existe en Auth
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: "User already registered" },
+    });
+
+    const res = await registrarRestauranteDirectoAction(baseInput);
+
+    expect(res.success).toBeFalsy();
+    expect(res.error).toBe(
+      "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña."
+    );
+    expect(mockUpdateUserById).not.toHaveBeenCalled();
+    expect(mockListUsers).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it("VULNERABILIDAD PREVENIDA (b): correo con fila en usuarios: mismo comportamiento seguro", async () => {
+    // Con fila en usuarios
+    vi.spyOn(db.query.usuarios, "findFirst").mockResolvedValueOnce({
+      id: "usr-preexistente-db",
+      email: baseInput.email.toLowerCase(),
+      nombre: "Dueño Preexistente",
+    } as any);
+
+    const res = await registrarRestauranteDirectoAction(baseInput);
+
+    expect(res.success).toBeFalsy();
+    expect(res.error).toBe(
+      "No fue posible completar el registro con ese correo. Si ya tienes cuenta, inicia sesión o recupera tu contraseña."
+    );
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockUpdateUserById).not.toHaveBeenCalled();
+    expect(mockListUsers).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
