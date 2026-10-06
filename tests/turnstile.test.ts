@@ -114,15 +114,44 @@ describe("Cloudflare Turnstile Guard", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
-    it("no bloquea con claves dummy si SKIP_CAPTCHA_IN_TESTS está activo", async () => {
+    it("no bloquea con claves dummy si SKIP_CAPTCHA_IN_TESTS está activo (fuera de producción Vercel)", async () => {
       (process.env as any).NODE_ENV = "production";
+      delete process.env.VERCEL_ENV;
       process.env.SKIP_CAPTCHA_IN_TESTS = "true";
       process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
 
-      // Con SKIP_CAPTCHA_IN_TESTS no se bloquea por guard y si no hay token retorna success true
+      // Con SKIP_CAPTCHA_IN_TESTS (sin VERCEL_ENV) no se bloquea por guard y si no hay token retorna success true
       const res = await validarTurnstileToken(null, "127.0.0.1");
       expect(res.success).toBe(true);
+    });
+  });
+
+  describe("4. VERCEL_ENV=production ignora SKIP_CAPTCHA_IN_TESTS", () => {
+    it("producción con VERCEL_ENV=production y la bandera activa no omite la verificación", async () => {
+      (process.env as any).NODE_ENV = "production";
+      process.env.VERCEL_ENV = "production";
+      process.env.SKIP_CAPTCHA_IN_TESTS = "true";
+      process.env.TURNSTILE_SECRET_KEY = "0x4AAAAAAAValidSecretKey123";
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAAAValidSiteKey123";
+
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Sin token, la verificación NO debe omitirse y debe fallar exigiendo captcha
+      const res = await validarTurnstileToken(null, "127.0.0.1");
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/completa la verificación de seguridad/i);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/SKIP_CAPTCHA_IN_TESTS está activo pero se ignora en producción real de Vercel/i)
+      );
+
+      // Garantizar que no se imprimen valores de claves en los logs
+      for (const call of consoleErrorSpy.mock.calls) {
+        const loggedText = call.join(" ");
+        expect(loggedText).not.toContain("0x4AAAAAAAValidSecretKey123");
+        expect(loggedText).not.toContain("0x4AAAAAAAValidSiteKey123");
+      }
     });
   });
 });
