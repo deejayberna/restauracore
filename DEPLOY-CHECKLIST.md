@@ -113,3 +113,57 @@ Configurados en `vercel.json`:
   - Se apoya en la restricción atómica `UNIQUE(restaurante_id, dias_restantes)` en `recordatorios_trial_enviados` para garantizar idempotencia y evitar envíos duplicados.
 - **`prediccion-demanda` (`0 3 * * *` = 03:00 UTC / 21:00 CDMX):**
   - Ejecución diaria para proyección de compras e insumos del día siguiente con IA. Requiere `ANTHROPIC_API_KEY`.
+
+---
+
+## 9. Turnstile en Producción
+
+Para habilitar la protección anti-bot real en `/registro` y no depender de claves de prueba:
+
+1. **Crear Widget en Cloudflare Turnstile:**
+   - En el Dashboard de Cloudflare, ve a **Turnstile** -> **Add Widget**.
+   - **Widget name:** `RestauraCore Prod` (o nombre identificable).
+   - **Domains / Hostnames:** Agrega `restautom.vercel.app` (y dominios adicionales o de preview si aplica).
+   - **Widget Mode:** Selecciona **Managed** (Recomendado).
+2. **Copiar Credenciales:**
+   - **Site Key:** Clave pública (comienza usualmente con `0x4...`).
+   - **Secret Key:** Clave privada para verificación server-side.
+3. **Configurar en Vercel (`Project Settings` -> `Environment Variables`):**
+   - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`: Configurar como **Config** (texto plano, expuesto al cliente).
+   - `TURNSTILE_SECRET_KEY`: Configurar como **Secret / Sensitive** (privado del backend).
+4. **Redeploy sin Caché:**
+   - Realizar un **Redeploy** (marcando *Redeploy without existing build cache*) para asegurar que Next.js compile `NEXT_PUBLIC_TURNSTILE_SITE_KEY` en el bundle del frontend y las Server Actions / funciones serverless tengan acceso a `TURNSTILE_SECRET_KEY`.
+
+---
+
+## 10. Migración a Dominio Propio (Cuando haya al menos 5 clientes)
+
+Cuando el SaaS pase de `restautom.vercel.app` a un dominio personalizado propio (ej. `app.restauracore.com`), se deben actualizar los siguientes puntos:
+
+1. **Dominio en Vercel:**
+   - En `Project Settings` -> `Domains`, agregar el nuevo dominio y configurar los registros DNS (CNAME / A) correspondientes.
+2. **Variable `NEXT_PUBLIC_APP_URL`:**
+   - Actualizar en Vercel Production a `https://tudominio.com` y hacer redeploy.
+3. **Supabase Auth (Site URL y Redirect URLs):**
+   - En el Dashboard de Supabase (`Authentication` -> `URL Configuration`):
+     - **Site URL:** Actualizar a `https://tudominio.com`.
+     - **Redirect URLs:** Agregar `https://tudominio.com/**` y rutas de callback pertinentes.
+4. **Endpoint de Webhook de Stripe:**
+   - En el Dashboard de Stripe (en modo Live y Test según corresponda):
+     - Actualizar el endpoint a `https://tudominio.com/api/webhooks/stripe`.
+     - Si se genera un nuevo secreto de firma, actualizar `STRIPE_WEBHOOK_SECRET` en Vercel.
+5. **Hostnames del Widget de Cloudflare Turnstile:**
+   - En el Dashboard de Cloudflare -> Turnstile -> editar widget:
+     - Agregar el nuevo dominio a la lista de dominios autorizados.
+6. **Re-registro del Webhook de Telegram:**
+   - Ejecutar la llamada a la API de Telegram con `setWebhook` para apuntar a la nueva URL:
+     `https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://tudominio.com/api/webhooks/telegram&secret_token=<TELEGRAM_WEBHOOK_SECRET>`.
+7. **Email Transaccional (Resend o SMTP propio en Supabase):**
+   - Configurar y verificar el dominio propio en Resend (registros SPF, DKIM, DMARC, MX) y actualizar `RESEND_FROM_EMAIL` (ej. `noreply@tudominio.com`), o configurar SMTP propio con dicho dominio en Supabase Auth.
+8. **CSP (Content Security Policy):**
+   - La directiva de Content Security Policy en `next.config.ts` utiliza `'self'` para orígenes de la aplicación, por lo que **no requiere cambios** al cambiar de dominio.
+
+> [!NOTE]
+> **Correo transaccional sin dominio propio:**  
+> Los servicios de correo predeterminados incluidos en Supabase Auth y las cuentas gratuitas de Resend sin dominio verificado **únicamente entregan correos a la misma cuenta del propietario**. Mientras no se cuente con un dominio propio verificado, el envío fiable de correos de confirmación de cuenta, invitaciones a empleados y recuperación de contraseñas para terceros requiere configurar en Supabase Auth un proveedor SMTP que permita verificar un solo remitente (por ejemplo **Brevo**) o una cuenta de **Gmail con contraseña de aplicación**.
+
