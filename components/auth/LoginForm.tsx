@@ -10,6 +10,7 @@ import {
   EyeOff,
   AlertTriangle,
   AlertCircle,
+  CheckCircle2,
   ShieldCheck,
   ArrowRight,
   Loader2,
@@ -18,7 +19,13 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 
-export function LoginForm({ initialError }: { initialError?: string }) {
+export function LoginForm({
+  initialError,
+  initialReset,
+}: {
+  initialError?: string;
+  initialReset?: boolean;
+}) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -81,6 +88,21 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             Acceso administrativo y operativo de sucursales
           </p>
         </div>
+
+        {/* Alerta de Contraseña Restablecida Exitosamente */}
+        {initialReset && (
+          <div className="mb-5 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs flex items-start gap-3 animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-emerald-300 font-semibold mb-0.5">
+                Contraseña Restablecida Exitosamente
+              </strong>
+              <span>
+                Tu contraseña ha sido actualizada. Por favor inicia sesión con tu nueva contraseña.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Alerta de Redirección por Autorización */}
         {initialError === "unauthorized" && (
@@ -161,12 +183,20 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="block text-xs font-semibold text-slate-300 mb-1.5"
-            >
-              Contraseña <span className="text-orange-400">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="password"
+                className="block text-xs font-semibold text-slate-300"
+              >
+                Contraseña <span className="text-orange-400">*</span>
+              </label>
+              <Link
+                href="/recuperar-contrasena"
+                className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium cursor-pointer"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <div className="relative flex items-center">
               <div className="absolute left-3.5 pointer-events-none text-slate-400">
                 <Lock className="w-4 h-4" />

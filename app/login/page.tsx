@@ -6,7 +6,7 @@ import { BrandLogo } from "@/components/ui/BrandLogo";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reset?: string }>;
 }) {
   const params = await searchParams;
 
@@ -46,7 +46,7 @@ export default async function LoginPage({
 
       {/* Contenido Central */}
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-6">
-        <LoginForm initialError={params.error} />
+        <LoginForm initialError={params.error} initialReset={params.reset === "success"} />
       </main>
 
       {/* Footer simple */}

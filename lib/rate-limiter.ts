@@ -65,6 +65,7 @@ export const RATE_LIMIT_CONFIGS = {
   pedido: { limit: 10, window: "60 s", windowMs: 60 * 1000 },
   login: { limit: 5, window: "60 s", windowMs: 60 * 1000 },
   registro: { limit: 3, window: "3600 s", windowMs: 60 * 60 * 1000 }, // 3 registros por IP por hora
+  recuperacion: { limit: 5, window: "3600 s", windowMs: 60 * 60 * 1000 }, // 5 solicitudes de recuperación por IP por hora
 } as const;
 
 export async function checkRateLimit(
@@ -111,5 +112,9 @@ export async function checkRateLimitLogin(ip: string): Promise<RateLimitResult> 
 
 export async function checkRateLimitRegistro(ip: string): Promise<RateLimitResult> {
   return checkRateLimit("registro", ip);
+}
+
+export async function checkRateLimitRecuperacion(ip: string): Promise<RateLimitResult> {
+  return checkRateLimit("recuperacion", ip);
 }
 

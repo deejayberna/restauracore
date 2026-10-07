@@ -159,9 +159,22 @@ export default function RegistroPage({
         )}
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 text-sm flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-            <span>{error}</span>
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+              <span>{error}</span>
+            </div>
+            {(error.toLowerCase().includes("inicia sesión") ||
+              error.toLowerCase().includes("ya tienes cuenta") ||
+              error.toLowerCase().includes("ya existe una cuenta") ||
+              error.toLowerCase().includes("registrado")) && (
+              <Link
+                href="/login"
+                className="shrink-0 font-bold text-orange-600 hover:text-orange-700 underline text-xs cursor-pointer ml-8 sm:ml-0"
+              >
+                Iniciar Sesión
+              </Link>
+            )}
           </div>
         )}
 
