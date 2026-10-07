@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { User, KeyRound, Store, Shield, LogOut, CheckCircle2 } from "lucide-react";
+import { User, KeyRound, Store, Shield, LogOut, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,30 +26,37 @@ export function PerfilView({
   branches: BranchInfo[];
 }) {
   const { toast } = useToast();
+  const [passwordActual, setPasswordActual] = useState("");
   const [nuevaPassword, setNuevaPassword] = useState("");
-  const [confirmarPassword, setConfirmarPassword] = useState("");
+  const [showPasswordActual, setShowPasswordActual] = useState(false);
+  const [showNuevaPassword, setShowNuevaPassword] = useState(false);
   const [cambiando, setCambiando] = useState(false);
 
   async function handleCambiarPassword(e: React.FormEvent) {
     e.preventDefault();
 
-    if (nuevaPassword.length < 6) {
-      toast("La nueva contraseña debe contener al menos 6 caracteres.", "warning");
+    if (!passwordActual) {
+      toast("Por favor ingresa tu contraseña actual.", "warning");
       return;
     }
 
-    if (nuevaPassword !== confirmarPassword) {
-      toast("Las contraseñas ingresadas no coinciden.", "warning");
+    if (nuevaPassword.length < 8) {
+      toast("La nueva contraseña debe contener al menos 8 caracteres.", "warning");
+      return;
+    }
+
+    if (nuevaPassword === passwordActual) {
+      toast("La nueva contraseña debe ser distinta de la actual.", "warning");
       return;
     }
 
     setCambiando(true);
     try {
-      const res = await cambiarPasswordAction(nuevaPassword);
+      const res = await cambiarPasswordAction({ passwordActual, nuevaPassword });
       if (res.ok) {
         toast("Contraseña actualizada exitosamente.", "success");
+        setPasswordActual("");
         setNuevaPassword("");
-        setConfirmarPassword("");
       } else {
         toast(res.error || "No se pudo actualizar la contraseña.", "error");
       }
@@ -133,23 +140,63 @@ export function PerfilView({
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCambiarPassword} className="space-y-4">
-                <Input
-                  label="Nueva Contraseña"
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  value={nuevaPassword}
-                  onChange={(e) => setNuevaPassword(e.target.value)}
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Contraseña actual <span className="text-orange-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPasswordActual ? "text" : "password"}
+                      placeholder="Tu contraseña actual"
+                      value={passwordActual}
+                      onChange={(e) => setPasswordActual(e.target.value)}
+                      required
+                      disabled={cambiando}
+                      className="w-full pl-3.5 pr-11 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordActual(!showPasswordActual)}
+                      tabIndex={-1}
+                      className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none cursor-pointer"
+                      title={showPasswordActual ? "Ocultar contraseña" : "Ver contraseña"}
+                      aria-label={showPasswordActual ? "Ocultar contraseña" : "Ver contraseña"}
+                    >
+                      {showPasswordActual ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-                <Input
-                  label="Confirmar Nueva Contraseña"
-                  type="password"
-                  placeholder="Repite tu nueva contraseña"
-                  value={confirmarPassword}
-                  onChange={(e) => setConfirmarPassword(e.target.value)}
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Nueva contraseña <span className="text-orange-500">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showNuevaPassword ? "text" : "password"}
+                      placeholder="Mínimo 8 caracteres (distinta de la actual)"
+                      value={nuevaPassword}
+                      onChange={(e) => setNuevaPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      disabled={cambiando}
+                      className="w-full pl-3.5 pr-11 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNuevaPassword(!showNuevaPassword)}
+                      tabIndex={-1}
+                      className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none cursor-pointer"
+                      title={showNuevaPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                      aria-label={showNuevaPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                    >
+                      {showNuevaPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Debe tener al menos 8 caracteres y ser diferente de tu contraseña actual.
+                  </p>
+                </div>
 
                 <div className="flex justify-end pt-2">
                   <Button type="submit" loading={cambiando}>

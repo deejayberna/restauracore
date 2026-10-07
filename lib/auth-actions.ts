@@ -1,13 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { db } from "@/db";
-import { usuarios, usuarioRestaurantes, restaurantes } from "@/db/schema";
+import { usuarios, usuarioRestaurantes, restaurantes, logAuditoria } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { validateOrThrow, z } from "@/lib/validation";
 import { cookies, headers } from "next/headers";
-import { checkRateLimitLogin } from "@/lib/rate-limiter";
+import { checkRateLimitLogin, checkRateLimitCambioPassword } from "@/lib/rate-limiter";
 import { isSuperAdminEmail } from "@/lib/superadmin-utils";
 
 const loginSchema = z.object({
@@ -171,20 +172,174 @@ export async function getUsuarioActual() {
   return usuario ?? null;
 }
 
-export async function cambiarPasswordAction(nuevaPassword: string) {
-  if (!nuevaPassword || nuevaPassword.length < 6) {
-    return { ok: false, error: "La contraseña debe contener al menos 6 caracteres." };
+export async function cambiarPasswordAction(
+  passwordActualOrInput: string | { passwordActual: string; nuevaPassword: string },
+  nuevaPasswordArg?: string
+): Promise<{ ok: boolean; mensaje?: string; error?: string }> {
+  try {
+    let passwordActual = "";
+    let nuevaPassword = "";
+
+    if (typeof passwordActualOrInput === "object" && passwordActualOrInput !== null) {
+      passwordActual = passwordActualOrInput.passwordActual || "";
+      nuevaPassword = passwordActualOrInput.nuevaPassword || "";
+    } else if (typeof passwordActualOrInput === "string") {
+      if (nuevaPasswordArg !== undefined) {
+        passwordActual = passwordActualOrInput;
+        nuevaPassword = nuevaPasswordArg;
+      } else {
+        nuevaPassword = passwordActualOrInput;
+      }
+    }
+
+    // 1. Exigir sesión activa
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user || !user.email) {
+      return {
+        ok: false,
+        error: "Debes tener una sesión activa para cambiar tu contraseña.",
+      };
+    }
+
+    // 2. Límite de intentos: 5 por 15 minutos por usuario
+    const rateCheck = await checkRateLimitCambioPassword(user.id);
+    if (!rateCheck.success) {
+      return {
+        ok: false,
+        error: "Demasiados intentos para cambiar la contraseña. Por favor intenta en 15 minutos.",
+      };
+    }
+
+    // 3. Validar entradas
+    if (!passwordActual) {
+      return {
+        ok: false,
+        error: "Debes ingresar tu contraseña actual.",
+      };
+    }
+
+    if (!nuevaPassword || nuevaPassword.length < 8) {
+      return {
+        ok: false,
+        error: "La nueva contraseña debe tener al menos 8 caracteres.",
+      };
+    }
+
+    if (nuevaPassword === passwordActual) {
+      return {
+        ok: false,
+        error: "La nueva contraseña debe ser distinta de la actual.",
+      };
+    }
+
+    // 4. Verificar contraseña actual con cliente aparte que NO modifique cookies ni sesión
+    const tempSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      }
+    );
+
+    const { error: signInError } = await tempSupabase.auth.signInWithPassword({
+      email: user.email,
+      password: passwordActual,
+    });
+
+    if (signInError) {
+      return {
+        ok: false,
+        error: "La contraseña actual no es correcta",
+      };
+    }
+
+    // 5. Actualizar sobre la sesión normal
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: nuevaPassword,
+    });
+
+    if (updateError) {
+      return {
+        ok: false,
+        error: updateError.message || "No fue posible actualizar la contraseña.",
+      };
+    }
+
+    // 6. Cerrar las demás sesiones del usuario (scope "others")
+    try {
+      await supabase.auth.signOut({ scope: "others" });
+    } catch {
+      // Ignorar si el backend de Supabase en este entorno no soporta el flag de scope
+    }
+
+    // 7. Registrar evento CAMBIO_PASSWORD en log_auditoria (sin valores sensibles ni contraseñas)
+    try {
+      let ip: string | null = null;
+      try {
+        const h = await headers();
+        ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+      } catch {}
+
+      const cookieStore = await cookies();
+      let restauranteId = cookieStore.get("restaurante_activo")?.value;
+
+      const usuarioDb = await db.query.usuarios.findFirst({
+        where: eq(usuarios.auth_id, user.id),
+      });
+
+      if (usuarioDb) {
+        if (!restauranteId) {
+          const vinculo = await db.query.usuarioRestaurantes.findFirst({
+            where: eq(usuarioRestaurantes.usuario_id, usuarioDb.id),
+          });
+          restauranteId = vinculo?.restaurante_id;
+        }
+
+        if (restauranteId) {
+          await db.insert(logAuditoria).values({
+            restaurante_id: restauranteId,
+            usuario_id: usuarioDb.id,
+            accion: "CAMBIO_PASSWORD",
+            tabla_afectada: "auth.users",
+            registro_id: user.id,
+            valores_anteriores: null,
+            valores_nuevos: null,
+            ip_origen: ip,
+          });
+        }
+      }
+    } catch (auditErr: any) {
+      console.error("[CAMBIO_PASSWORD_AUDIT_ERROR]", {
+        tag: "AUDITORIA_ERROR",
+        paso: "REGISTRO_LOG_AUDITORIA",
+        errorName: auditErr?.name || "Error",
+        errorMessage: auditErr?.message || String(auditErr),
+      });
+    }
+
+    return {
+      ok: true,
+      mensaje: "Contraseña actualizada exitosamente.",
+    };
+  } catch (err: any) {
+    console.error("[CAMBIO_PASSWORD_ERROR]", {
+      tag: "CAMBIO_PASSWORD_EXCEPTION",
+      paso: "PROCESAR_CAMBIO_PASSWORD",
+      errorName: err?.name || "Error",
+      errorMessage: err?.message || String(err),
+    });
+    return {
+      ok: false,
+      error: "Ocurrió un error inesperado al procesar el cambio de contraseña. Por favor intenta más tarde.",
+    };
   }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.updateUser({
-    password: nuevaPassword,
-  });
-
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
-  return { ok: true, mensaje: "Contraseña actualizada exitosamente." };
 }
 

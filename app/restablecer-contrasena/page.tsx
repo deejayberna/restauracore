@@ -24,6 +24,7 @@ function RestablecerContrasenaContent() {
 
   // Estados: "verificando" | "listo" | "invalido" | "exito"
   const [estado, setEstado] = useState<"verificando" | "listo" | "invalido" | "exito">("verificando");
+  const [haySesionAbierta, setHaySesionAbierta] = useState(false);
   const [errorMensaje, setErrorMensaje] = useState<string | null>(null);
   const [nuevaPassword, setNuevaPassword] = useState("");
   const [confirmarPassword, setConfirmarPassword] = useState("");
@@ -33,9 +34,21 @@ function RestablecerContrasenaContent() {
 
   useEffect(() => {
     let cancelado = false;
+    let timer: NodeJS.Timeout | null = null;
+    let subscription: { unsubscribe: () => void } | null = null;
     const supabase = createSupabaseBrowserClient();
 
     async function verificarAcceso() {
+      // 0. Detectar si el usuario ya tiene una sesión ordinaria iniciada
+      try {
+        const {
+          data: { session: existingSession },
+        } = await supabase.auth.getSession();
+        if (existingSession && !cancelado) {
+          setHaySesionAbierta(true);
+        }
+      } catch {}
+
       // 1. Verificar si la URL ya reporta error de Supabase en query params
       const qError = searchParams.get("error");
       const qErrorDesc = searchParams.get("error_description");
@@ -50,7 +63,7 @@ function RestablecerContrasenaContent() {
         return;
       }
 
-      // 2. Verificar hash en la ventana (por si Supabase utilizó redirección implícita con #error o #access_token)
+      // 2. Verificar hash en la ventana
       if (typeof window !== "undefined" && window.location.hash) {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const hError = hashParams.get("error");
@@ -64,16 +77,6 @@ function RestablecerContrasenaContent() {
             );
           }
           return;
-        }
-
-        // Si el hash trae tokens de recuperación, Supabase Browser Client los procesa automáticamente
-        const type = hashParams.get("type");
-        if (type === "recovery" || hashParams.has("access_token")) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session && !cancelado) {
-            setEstado("listo");
-            return;
-          }
         }
       }
 
@@ -107,46 +110,53 @@ function RestablecerContrasenaContent() {
         }
       }
 
-      // 4. Si no hay code ni error en URL, verificar si ya hay una sesión activa de recuperación
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      // 4. Si hay hash en la URL con token de recuperación, escuchar evento explícito PASSWORD_RECOVERY
+      const hasRecoveryHash =
+        typeof window !== "undefined" &&
+        window.location.hash &&
+        (window.location.hash.includes("type=recovery") || window.location.hash.includes("access_token"));
 
-      if (session && !cancelado) {
-        setEstado("listo");
+      if (hasRecoveryHash) {
+        const authListener = supabase.auth.onAuthStateChange((event) => {
+          if (cancelado) return;
+          if (event === "PASSWORD_RECOVERY") {
+            setEstado("listo");
+          }
+        });
+        subscription = authListener?.data?.subscription || null;
+
+        timer = setTimeout(() => {
+          if (!cancelado) {
+            setEstado((current) => {
+              if (current === "verificando") {
+                setErrorMensaje(
+                  "El enlace de recuperación es inválido, no contiene un código de seguridad o ha expirado."
+                );
+                return "invalido";
+              }
+              return current;
+            });
+          }
+        }, 1500);
         return;
       }
 
-      // 5. Escuchar evento PASSWORD_RECOVERY
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((event, session) => {
-        if (cancelado) return;
-        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-          setEstado("listo");
-        }
-      });
-
-      // Timeout de cortesía para dar tiempo a la resolución de sesión
-      const timer = setTimeout(() => {
-        if (!cancelado && estado === "verificando") {
-          setEstado("invalido");
-          setErrorMensaje(
-            "No se encontró un código o sesión de recuperación válida. Por favor solicita un nuevo enlace."
-          );
-        }
-      }, 3000);
-
-      return () => {
-        subscription.unsubscribe();
-        clearTimeout(timer);
-      };
+      // 5. Si no hay parámetro code ni hash de recuperación en esta visita, el enlace es inválido de inmediato
+      // (incluso si hay sesión abierta ordinaria en el navegador)
+      if (!cancelado) {
+        setEstado("invalido");
+        setErrorMensaje(
+          "El enlace de recuperación es inválido, no contiene un código de seguridad o ha expirado."
+        );
+      }
     }
 
     verificarAcceso();
 
     return () => {
       cancelado = true;
+      if (subscription) subscription.unsubscribe();
+      if (timer) clearTimeout(timer);
     };
   }, [searchParams]);
 
@@ -245,6 +255,24 @@ function RestablecerContrasenaContent() {
                 </p>
               </div>
             </div>
+
+            {/* Si el usuario ya tiene sesión abierta ordinaria pero no vino con código de recuperación */}
+            {haySesionAbierta && (
+              <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-200 text-xs space-y-2">
+                <p className="font-semibold text-sky-300">
+                  ¿Tienes tu sesión iniciada?
+                </p>
+                <p className="text-slate-300 leading-relaxed">
+                  Puedes cambiar tu contraseña directamente desde tu perfil ingresando tu contraseña actual.
+                </p>
+                <Link
+                  href="/perfil"
+                  className="inline-flex items-center gap-1.5 font-bold text-sky-400 hover:text-sky-300 underline pt-1 cursor-pointer"
+                >
+                  Ir a Mi Perfil para cambiar contraseña &rarr;
+                </Link>
+              </div>
+            )}
 
             <div className="space-y-3">
               <Link
