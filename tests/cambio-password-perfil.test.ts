@@ -2,6 +2,49 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
+const {
+  mockCookieState,
+  mockDbInsertValues,
+  mockDbInsert,
+  mockUsuarioRestaurantesFindMany,
+  mockSignInWithPassword,
+  mockBrowserGetSession,
+  mockBrowserOnAuthStateChange,
+  mockGetUser,
+  mockUpdateUser,
+  mockSignOut,
+} = vi.hoisted(() => {
+  const mockCookieState = { restauranteActivo: "restaurante-mock-uuid-1" };
+  const mockDbInsertValues = vi.fn().mockResolvedValue({});
+  const mockDbInsert = vi.fn().mockReturnValue({
+    values: mockDbInsertValues,
+  });
+  const mockUsuarioRestaurantesFindMany = vi.fn().mockResolvedValue([
+    {
+      restaurante_id: "restaurante-mock-uuid-1",
+      usuario_id: "usuario-mock-db-id",
+      activo: true,
+    },
+  ]);
+
+  return {
+    mockCookieState,
+    mockDbInsertValues,
+    mockDbInsert,
+    mockUsuarioRestaurantesFindMany,
+    mockSignInWithPassword: vi.fn(),
+    mockBrowserGetSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    mockBrowserOnAuthStateChange: vi.fn().mockReturnValue({
+      data: {
+        subscription: { unsubscribe: vi.fn() },
+      },
+    }),
+    mockGetUser: vi.fn(),
+    mockUpdateUser: vi.fn(),
+    mockSignOut: vi.fn(),
+  };
+});
+
 // Mock de next/headers a nivel de módulo
 vi.mock("next/headers", () => ({
   headers: vi.fn().mockImplementation(() =>
@@ -15,7 +58,7 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn().mockImplementation(() =>
     Promise.resolve({
       get: (name: string) => {
-        if (name === "restaurante_activo") return { value: "restaurante-mock-uuid-1" };
+        if (name === "restaurante_activo") return { value: mockCookieState.restauranteActivo };
         return undefined;
       },
       getAll: () => [],
@@ -24,32 +67,6 @@ vi.mock("next/headers", () => ({
     })
   ),
 }));
-
-const {
-  mockDbInsert,
-  mockSignInWithPassword,
-  mockBrowserGetSession,
-  mockBrowserOnAuthStateChange,
-  mockGetUser,
-  mockUpdateUser,
-  mockSignOut,
-} = vi.hoisted(() => {
-  return {
-    mockDbInsert: vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue({}),
-    }),
-    mockSignInWithPassword: vi.fn(),
-    mockBrowserGetSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
-    mockBrowserOnAuthStateChange: vi.fn().mockReturnValue({
-      data: {
-        subscription: { unsubscribe: vi.fn() },
-      },
-    }),
-    mockGetUser: vi.fn(),
-    mockUpdateUser: vi.fn(),
-    mockSignOut: vi.fn(),
-  };
-});
 
 // Mock de base de datos para no tocar producción ni base de datos real
 vi.mock("@/db", () => ({
@@ -66,7 +83,9 @@ vi.mock("@/db", () => ({
         findFirst: vi.fn().mockResolvedValue({
           restaurante_id: "restaurante-mock-uuid-1",
           usuario_id: "usuario-mock-db-id",
+          activo: true,
         }),
+        findMany: mockUsuarioRestaurantesFindMany,
       },
     },
     insert: mockDbInsert,
@@ -129,7 +148,9 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
 
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    // Por defecto, usuario autenticado en la sesión normal
+    // Por defecto, usuario autenticado en la sesión normal con restaurante activo en cookie
+    mockCookieState.restauranteActivo = "restaurante-mock-uuid-1";
+
     mockGetUser.mockResolvedValue({
       data: {
         user: {
@@ -138,6 +159,14 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
         },
       },
     });
+
+    mockUsuarioRestaurantesFindMany.mockResolvedValue([
+      {
+        restaurante_id: "restaurante-mock-uuid-1",
+        usuario_id: "usuario-mock-db-id",
+        activo: true,
+      },
+    ]);
 
     mockUpdateUser.mockResolvedValue({ error: null });
     mockSignOut.mockResolvedValue({ error: null });
@@ -194,6 +223,100 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
       });
       expect(mockSignOut).toHaveBeenCalledWith({ scope: "others" });
       expect(mockDbInsert).toHaveBeenCalled();
+      expect(mockDbInsertValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurante_id: "restaurante-mock-uuid-1",
+          accion: "CAMBIO_PASSWORD",
+        })
+      );
+    });
+
+    it("cookie con restaurante ajeno: el evento se asienta en su propio restaurante y nunca en el ajeno", async () => {
+      // Cookie alterada con ID de un restaurante al que el usuario NO pertenece
+      mockCookieState.restauranteActivo = "restaurante-ajeno-hacker-uuid";
+
+      // Vínculos propios legítimos del usuario
+      mockUsuarioRestaurantesFindMany.mockResolvedValueOnce([
+        {
+          restaurante_id: "restaurante-propio-legitimo-uuid",
+          usuario_id: "usuario-mock-db-id",
+          activo: true,
+        },
+      ]);
+
+      mockSignInWithPassword.mockResolvedValueOnce({
+        data: { user: { id: "user-test-uuid-active" } },
+        error: null,
+      });
+
+      const res = await cambiarPasswordAction({
+        passwordActual: "contrasena-correcta",
+        nuevaPassword: "nueva-password-segura-123",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(mockDbInsert).toHaveBeenCalled();
+      // Verificar que el log se asienta en el propio restaurante legítimo y NUNCA en el ajeno
+      expect(mockDbInsertValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurante_id: "restaurante-propio-legitimo-uuid",
+          accion: "CAMBIO_PASSWORD",
+        })
+      );
+      expect(mockDbInsertValues).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          restaurante_id: "restaurante-ajeno-hacker-uuid",
+        })
+      );
+    });
+
+    it("usuario sin vínculos a ningún restaurante (ej. super-admin): cambia la contraseña sin error y sin log", async () => {
+      // Usuario sin vínculos en usuario_restaurantes
+      mockUsuarioRestaurantesFindMany.mockResolvedValueOnce([]);
+
+      mockSignInWithPassword.mockResolvedValueOnce({
+        data: { user: { id: "user-test-uuid-active" } },
+        error: null,
+      });
+
+      const res = await cambiarPasswordAction({
+        passwordActual: "contrasena-correcta",
+        nuevaPassword: "nueva-password-segura-123",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(res.mensaje).toBe("Contraseña actualizada exitosamente.");
+      expect(mockUpdateUser).toHaveBeenCalledWith({
+        password: "nueva-password-segura-123",
+      });
+      // NO se inserta ninguna fila en log_auditoria y no falla
+      expect(mockDbInsert).not.toHaveBeenCalled();
+    });
+
+    it("si signOut({scope: 'others'}) devuelve error: lo registra con console.error sin romper la operación", async () => {
+      mockSignInWithPassword.mockResolvedValueOnce({
+        data: { user: { id: "user-test-uuid-active" } },
+        error: null,
+      });
+
+      mockSignOut.mockResolvedValueOnce({
+        error: { name: "AuthApiError", message: "Failed to sign out other sessions" },
+      });
+
+      const res = await cambiarPasswordAction({
+        passwordActual: "contrasena-correcta",
+        nuevaPassword: "nueva-password-segura-123",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(res.mensaje).toBe("Contraseña actualizada exitosamente.");
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[CAMBIO_PASSWORD_SIGNOUT_OTHERS_ERROR]",
+        expect.objectContaining({
+          tag: "SIGNOUT_OTHERS_ERROR",
+          paso: "CERRAR_SESIONES_REMOTAS",
+        })
+      );
     });
 
     it("contraseña nueva igual a la actual: es rechazada", async () => {

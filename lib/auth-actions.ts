@@ -172,25 +172,13 @@ export async function getUsuarioActual() {
   return usuario ?? null;
 }
 
-export async function cambiarPasswordAction(
-  passwordActualOrInput: string | { passwordActual: string; nuevaPassword: string },
-  nuevaPasswordArg?: string
-): Promise<{ ok: boolean; mensaje?: string; error?: string }> {
+export async function cambiarPasswordAction(data: {
+  passwordActual: string;
+  nuevaPassword: string;
+}): Promise<{ ok: boolean; mensaje?: string; error?: string }> {
   try {
-    let passwordActual = "";
-    let nuevaPassword = "";
-
-    if (typeof passwordActualOrInput === "object" && passwordActualOrInput !== null) {
-      passwordActual = passwordActualOrInput.passwordActual || "";
-      nuevaPassword = passwordActualOrInput.nuevaPassword || "";
-    } else if (typeof passwordActualOrInput === "string") {
-      if (nuevaPasswordArg !== undefined) {
-        passwordActual = passwordActualOrInput;
-        nuevaPassword = nuevaPasswordArg;
-      } else {
-        nuevaPassword = passwordActualOrInput;
-      }
-    }
+    const passwordActual = data?.passwordActual || "";
+    const nuevaPassword = data?.nuevaPassword || "";
 
     // 1. Exigir sesión activa
     const supabase = await createSupabaseServerClient();
@@ -275,9 +263,22 @@ export async function cambiarPasswordAction(
 
     // 6. Cerrar las demás sesiones del usuario (scope "others")
     try {
-      await supabase.auth.signOut({ scope: "others" });
-    } catch {
-      // Ignorar si el backend de Supabase en este entorno no soporta el flag de scope
+      const { error: signOutOthersError } = await supabase.auth.signOut({ scope: "others" });
+      if (signOutOthersError) {
+        console.error("[CAMBIO_PASSWORD_SIGNOUT_OTHERS_ERROR]", {
+          tag: "SIGNOUT_OTHERS_ERROR",
+          paso: "CERRAR_SESIONES_REMOTAS",
+          errorName: signOutOthersError.name || "AuthError",
+          errorMessage: signOutOthersError.message,
+        });
+      }
+    } catch (signOutErr: any) {
+      console.error("[CAMBIO_PASSWORD_SIGNOUT_OTHERS_ERROR]", {
+        tag: "SIGNOUT_OTHERS_EXCEPTION",
+        paso: "CERRAR_SESIONES_REMOTAS",
+        errorName: signOutErr?.name || "Error",
+        errorMessage: signOutErr?.message || String(signOutErr),
+      });
     }
 
     // 7. Registrar evento CAMBIO_PASSWORD en log_auditoria (sin valores sensibles ni contraseñas)
@@ -288,33 +289,46 @@ export async function cambiarPasswordAction(
         ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
       } catch {}
 
-      const cookieStore = await cookies();
-      let restauranteId = cookieStore.get("restaurante_activo")?.value;
-
       const usuarioDb = await db.query.usuarios.findFirst({
         where: eq(usuarios.auth_id, user.id),
       });
 
       if (usuarioDb) {
-        if (!restauranteId) {
-          const vinculo = await db.query.usuarioRestaurantes.findFirst({
-            where: eq(usuarioRestaurantes.usuario_id, usuarioDb.id),
-          });
-          restauranteId = vinculo?.restaurante_id;
-        }
+        // Consultar vínculos activos del usuario
+        const vinculosActivos = await db.query.usuarioRestaurantes.findMany({
+          where: and(
+            eq(usuarioRestaurantes.usuario_id, usuarioDb.id),
+            eq(usuarioRestaurantes.activo, true)
+          ),
+        });
 
-        if (restauranteId) {
-          await db.insert(logAuditoria).values({
-            restaurante_id: restauranteId,
-            usuario_id: usuarioDb.id,
-            accion: "CAMBIO_PASSWORD",
-            tabla_afectada: "auth.users",
-            registro_id: user.id,
-            valores_anteriores: null,
-            valores_nuevos: null,
-            ip_origen: ip,
-          });
+        if (vinculosActivos && vinculosActivos.length > 0) {
+          const cookieStore = await cookies();
+          const cookieRestauranteId = cookieStore.get("restaurante_activo")?.value;
+
+          // Usar el restaurante de la cookie SOLO si el usuario tiene un vínculo activo con él
+          const vinculoValido = cookieRestauranteId
+            ? vinculosActivos.find((v) => v.restaurante_id === cookieRestauranteId)
+            : null;
+
+          const restauranteId = vinculoValido
+            ? vinculoValido.restaurante_id
+            : vinculosActivos[0].restaurante_id;
+
+          if (restauranteId) {
+            await db.insert(logAuditoria).values({
+              restaurante_id: restauranteId,
+              usuario_id: usuarioDb.id,
+              accion: "CAMBIO_PASSWORD",
+              tabla_afectada: "auth.users",
+              registro_id: user.id,
+              valores_anteriores: null,
+              valores_nuevos: null,
+              ip_origen: ip,
+            });
+          }
         }
+        // Si no tiene ningún vínculo activo (ej. super-admin), no se inserta fila y no se falla
       }
     } catch (auditErr: any) {
       console.error("[CAMBIO_PASSWORD_AUDIT_ERROR]", {
