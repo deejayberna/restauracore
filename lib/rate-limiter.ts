@@ -10,9 +10,18 @@ export interface RateLimitResult {
 
 // Store en memoria para desarrollo, pruebas o fallback si Upstash no está configurado
 const memoryStore = new Map<string, number[]>();
+let hasLoggedFallbackMemory = false;
+
+function logFallbackMemoria() {
+  if (!hasLoggedFallbackMemory) {
+    hasLoggedFallbackMemory = true;
+    console.error("[RATE_LIMITER_FALLBACK_MEMORIA] Rate limiter operando con fallback en memoria local");
+  }
+}
 
 export function resetRateLimits() {
   memoryStore.clear();
+  hasLoggedFallbackMemory = false;
 }
 
 function checkMemoryRateLimit(
@@ -55,8 +64,8 @@ if (
       url: process.env.UPSTASH_REDIS_REST_URL,
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
-  } catch (err) {
-    console.warn("No se pudo inicializar Upstash Redis, usando fallback en memoria:", err);
+  } catch {
+    logFallbackMemoria();
   }
 }
 
@@ -90,9 +99,11 @@ export async function checkRateLimit(
         remaining: res.remaining,
         reset: res.reset,
       };
-    } catch (e) {
-      console.warn("Fallo Upstash Redis durante rate limit, recurriendo a memoria:", e);
+    } catch {
+      logFallbackMemoria();
     }
+  } else {
+    logFallbackMemoria();
   }
 
   // Fallback en memoria
