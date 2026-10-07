@@ -80,7 +80,56 @@ function RestablecerContrasenaContent() {
         }
       }
 
-      // 3. Manejo del flujo PKCE: intercambio seguro del parámetro ?code= por sesión de recuperación
+      // 3. Manejo del flujo verifyOtp: ?token_hash=...&type=recovery (compatible entre dispositivos)
+      const tokenHash = searchParams.get("token_hash");
+      const typeParam = searchParams.get("type");
+      if (tokenHash) {
+        if (typeParam !== "recovery") {
+          if (!cancelado) {
+            setEstado("invalido");
+            setErrorMensaje(
+              "El tipo de token de recuperación es inválido o no fue especificado."
+            );
+          }
+          return;
+        }
+
+        try {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+
+          if (verifyError) {
+            console.error("[RESTABLECER_CONTRASENA] Error al verificar token_hash:", verifyError);
+            if (!cancelado) {
+              setEstado("invalido");
+              setErrorMensaje(
+                "El código o enlace de recuperación es inválido, ya fue utilizado o ha expirado."
+              );
+            }
+            return;
+          }
+
+          if (!cancelado) {
+            setEstado("listo");
+            // Quitar token_hash de la URL para que un refresh no reintente el token
+            try {
+              router.replace("/restablecer-contrasena");
+            } catch {}
+          }
+          return;
+        } catch (err: any) {
+          console.error("[RESTABLECER_CONTRASENA] Excepción al verificar token_hash:", err);
+          if (!cancelado) {
+            setEstado("invalido");
+            setErrorMensaje("No fue posible validar el enlace de recuperación.");
+          }
+          return;
+        }
+      }
+
+      // 4. Manejo del flujo PKCE: intercambio seguro del parámetro ?code= por sesión de recuperación
       const code = searchParams.get("code");
       if (code) {
         try {
@@ -98,6 +147,9 @@ function RestablecerContrasenaContent() {
 
           if (!cancelado) {
             setEstado("listo");
+            try {
+              router.replace("/restablecer-contrasena");
+            } catch {}
           }
           return;
         } catch (err: any) {
@@ -110,7 +162,7 @@ function RestablecerContrasenaContent() {
         }
       }
 
-      // 4. Si hay hash en la URL con token de recuperación, escuchar evento explícito PASSWORD_RECOVERY
+      // 5. Si hay hash en la URL con token de recuperación, escuchar evento explícito PASSWORD_RECOVERY
       const hasRecoveryHash =
         typeof window !== "undefined" &&
         window.location.hash &&
@@ -141,7 +193,7 @@ function RestablecerContrasenaContent() {
         return;
       }
 
-      // 5. Si no hay parámetro code ni hash de recuperación en esta visita, el enlace es inválido de inmediato
+      // 6. Si no hay token_hash, ni code ni hash de recuperación en esta visita, el enlace es inválido de inmediato
       // (incluso si hay sesión abierta ordinaria en el navegador)
       if (!cancelado) {
         setEstado("invalido");

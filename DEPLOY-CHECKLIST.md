@@ -166,3 +166,34 @@ Cuando el SaaS pase de `restautom.vercel.app` a un dominio personalizado propio 
 > **Correo transaccional sin dominio propio:**  
 > Los servicios de correo predeterminados incluidos en Supabase Auth y las cuentas gratuitas de Resend sin dominio verificado **únicamente entregan correos a la misma cuenta del propietario**. Mientras no se cuente con un dominio propio verificado, el envío fiable de correos de confirmación de cuenta, invitaciones a empleados y recuperación de contraseñas para terceros requiere configurar en Supabase Auth un proveedor SMTP que permita verificar un solo remitente (por ejemplo **Brevo**) o una cuenta de **Gmail con contraseña de aplicación**.
 
+---
+
+## 11. Plantilla de Correo para Restablecer Contraseña (Supabase Auth)
+
+Para que el restablecimiento de contraseña funcione de forma consistente entre diferentes dispositivos y navegadores (evitando la limitación del `code_verifier` de PKCE restringido al navegador de solicitud), utiliza el enlace directo con `token_hash`:
+
+### Orden de ejecución obligatorio:
+1. **Primero:** Realizar el deploy del código a producción en Vercel (para que `/restablecer-contrasena` ya soporte el parámetro `token_hash`).
+2. **Segundo:** Pegar y guardar la plantilla en el panel de Supabase.
+
+### Configuración en el panel de Supabase:
+1. Dirígete a **Authentication** -> **URL Configuration**:
+   - **Site URL:** Debe ser exactamente `https://restautom.vercel.app` (sin barra al final).
+   - **Redirect URLs:** Asegúrate de tener agregada la URL canónica:
+     `https://restautom.vercel.app/restablecer-contrasena`
+2. Dirígete a **Authentication** -> **Email Templates** -> **Reset Password**.
+3. Reemplaza el enlace del cuerpo del mensaje por la siguiente URL:
+
+```html
+<h2>Restablecer contraseña</h2>
+<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en RestauraCore.</p>
+<p>Haz clic en el siguiente enlace para ingresar tu nueva contraseña:</p>
+<p>
+  <a href="{{ .SiteURL }}/restablecer-contrasena?token_hash={{ .TokenHash }}&type=recovery">
+    Restablecer mi contraseña
+  </a>
+</p>
+<p>Si no solicitaste este cambio, puedes ignorar este mensaje.</p>
+```
+
+

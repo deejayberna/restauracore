@@ -10,6 +10,10 @@ const {
   mockSignInWithPassword,
   mockBrowserGetSession,
   mockBrowserOnAuthStateChange,
+  mockVerifyOtp,
+  mockExchangeCodeForSession,
+  mockRouterReplace,
+  mockSearchParamsState,
   mockGetUser,
   mockUpdateUser,
   mockSignOut,
@@ -27,6 +31,10 @@ const {
     },
   ]);
 
+  const mockSearchParamsState = {
+    params: new URLSearchParams(),
+  };
+
   return {
     mockCookieState,
     mockDbInsertValues,
@@ -39,6 +47,10 @@ const {
         subscription: { unsubscribe: vi.fn() },
       },
     }),
+    mockVerifyOtp: vi.fn().mockResolvedValue({ error: null }),
+    mockExchangeCodeForSession: vi.fn().mockResolvedValue({ error: null }),
+    mockRouterReplace: vi.fn(),
+    mockSearchParamsState,
     mockGetUser: vi.fn(),
     mockUpdateUser: vi.fn(),
     mockSignOut: vi.fn(),
@@ -118,8 +130,9 @@ vi.mock("@/lib/supabase-server", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
+    replace: mockRouterReplace,
   }),
-  useSearchParams: () => new URLSearchParams(), // Sin código de recuperación
+  useSearchParams: () => mockSearchParamsState.params,
 }));
 
 // Mock de supabase browser client para RestablecerContrasenaPage
@@ -128,7 +141,8 @@ vi.mock("@/lib/supabase-browser", () => ({
     auth: {
       getSession: mockBrowserGetSession,
       onAuthStateChange: mockBrowserOnAuthStateChange,
-      exchangeCodeForSession: vi.fn().mockResolvedValue({ error: null }),
+      verifyOtp: mockVerifyOtp,
+      exchangeCodeForSession: mockExchangeCodeForSession,
       updateUser: vi.fn().mockResolvedValue({ error: null }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
@@ -150,6 +164,7 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
 
     // Por defecto, usuario autenticado en la sesión normal con restaurante activo en cookie
     mockCookieState.restauranteActivo = "restaurante-mock-uuid-1";
+    mockSearchParamsState.params = new URLSearchParams();
 
     mockGetUser.mockResolvedValue({
       data: {
@@ -177,6 +192,9 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
         subscription: { unsubscribe: vi.fn() },
       },
     });
+    mockVerifyOtp.mockResolvedValue({ data: { user: {} }, error: null });
+    mockExchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
+    mockRouterReplace.mockClear();
   });
 
   afterEach(() => {
@@ -407,20 +425,113 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
     });
   });
 
-  describe("2. Guard en /restablecer-contrasena con sesión abierta y sin código", () => {
-    it("/restablecer-contrasena con sesión abierta y sin código no muestra el formulario y ofrece enlace a /perfil", async () => {
-      // Simular que el usuario tiene sesión abierta en el navegador pero NO vino de un enlace de recuperación
+  describe("2. Guard en /restablecer-contrasena y flujos de recuperación", () => {
+    it("token_hash válido con type=recovery muestra el formulario y limpia la URL", async () => {
+      mockSearchParamsState.params = new URLSearchParams({
+        token_hash: "token-hash-valido-789",
+        type: "recovery",
+      });
+
+      mockVerifyOtp.mockResolvedValueOnce({
+        data: { user: { id: "user-recovery-verified" } },
+        error: null,
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(React.createElement(RestablecerContrasenaPage));
+      });
+
+      // Se llamó a verifyOtp con el token_hash y tipo recovery
+      expect(mockVerifyOtp).toHaveBeenCalledWith({
+        token_hash: "token-hash-valido-789",
+        type: "recovery",
+      });
+
+      // El formulario de nueva contraseña SÍ se muestra
+      const inputNuevaPassword = container.querySelector('input[name="nuevaPassword"]');
+      expect(inputNuevaPassword).not.toBeNull();
+
+      // Se limpió la URL con router.replace para evitar reuso en refresh
+      expect(mockRouterReplace).toHaveBeenCalledWith("/restablecer-contrasena");
+
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    it("token_hash con verifyOtp fallido (error) muestra enlace inválido", async () => {
+      mockSearchParamsState.params = new URLSearchParams({
+        token_hash: "token-hash-expirado",
+        type: "recovery",
+      });
+
+      mockVerifyOtp.mockResolvedValueOnce({
+        data: null,
+        error: { message: "Token expired or invalid" },
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(React.createElement(RestablecerContrasenaPage));
+      });
+
+      // El formulario NO se muestra
+      const inputNuevaPassword = container.querySelector('input[name="nuevaPassword"]');
+      expect(inputNuevaPassword).toBeNull();
+
+      // Muestra mensaje de enlace inválido
+      expect(container.textContent).toContain("Enlace inválido o expirado");
+      expect(container.querySelector('a[href="/recuperar-contrasena"]')).not.toBeNull();
+
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    it("token_hash sin type=recovery es rechazado como inválido", async () => {
+      mockSearchParamsState.params = new URLSearchParams({
+        token_hash: "token-hash-sin-type",
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(React.createElement(RestablecerContrasenaPage));
+      });
+
+      // NO debe llamar a verifyOtp si type no es recovery
+      expect(mockVerifyOtp).not.toHaveBeenCalled();
+
+      // El formulario NO se muestra
+      const inputNuevaPassword = container.querySelector('input[name="nuevaPassword"]');
+      expect(inputNuevaPassword).toBeNull();
+      expect(container.textContent).toContain("Enlace inválido o expirado");
+
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    it("con sesión abierta y sin token es inválido y ofrece enlace a /perfil", async () => {
+      mockSearchParamsState.params = new URLSearchParams(); // Sin token_hash ni code
+
       mockBrowserGetSession.mockResolvedValue({
         data: {
           session: {
             user: { id: "user-session-exists" },
           },
-        },
-      });
-
-      mockBrowserOnAuthStateChange.mockReturnValue({
-        data: {
-          subscription: { unsubscribe: vi.fn() },
         },
       });
 
@@ -444,7 +555,37 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
       expect(linkPerfil).not.toBeNull();
       expect(container.textContent).toContain("Ir a Mi Perfil");
 
-      // Limpieza
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    it("parámetro ?code= sigue funcionando e intercambia el código", async () => {
+      mockSearchParamsState.params = new URLSearchParams({
+        code: "pkce-code-valido-123",
+      });
+
+      mockExchangeCodeForSession.mockResolvedValueOnce({
+        data: { session: { user: { id: "user-pkce" } } },
+        error: null,
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(React.createElement(RestablecerContrasenaPage));
+      });
+
+      // Se llamó a exchangeCodeForSession con el código
+      expect(mockExchangeCodeForSession).toHaveBeenCalledWith("pkce-code-valido-123");
+
+      // El formulario de nueva contraseña SÍ se muestra
+      const inputNuevaPassword = container.querySelector('input[name="nuevaPassword"]');
+      expect(inputNuevaPassword).not.toBeNull();
+
       act(() => {
         root.unmount();
       });
@@ -452,3 +593,4 @@ describe("Cambio de Contraseña en /perfil y Guard de /restablecer-contrasena", 
     });
   });
 });
+
