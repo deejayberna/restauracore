@@ -13,6 +13,7 @@ const {
   mockVerifyOtp,
   mockExchangeCodeForSession,
   mockRouterReplace,
+  mockSearchParamsListeners,
   mockSearchParamsState,
   mockGetUser,
   mockUpdateUser,
@@ -31,9 +32,23 @@ const {
     },
   ]);
 
+  const mockSearchParamsListeners = new Set<() => void>();
   const mockSearchParamsState = {
     params: new URLSearchParams(),
+    setParams: (newParams: URLSearchParams) => {
+      mockSearchParamsState.params = newParams;
+      mockSearchParamsListeners.forEach((cb) => cb());
+    },
   };
+
+  const mockRouterReplace = vi.fn().mockImplementation((url: string) => {
+    const searchIndex = url.indexOf("?");
+    const nextParams =
+      searchIndex !== -1
+        ? new URLSearchParams(url.substring(searchIndex))
+        : new URLSearchParams();
+    mockSearchParamsState.setParams(nextParams);
+  });
 
   return {
     mockCookieState,
@@ -49,7 +64,8 @@ const {
     }),
     mockVerifyOtp: vi.fn().mockResolvedValue({ error: null }),
     mockExchangeCodeForSession: vi.fn().mockResolvedValue({ error: null }),
-    mockRouterReplace: vi.fn(),
+    mockRouterReplace,
+    mockSearchParamsListeners,
     mockSearchParamsState,
     mockGetUser: vi.fn(),
     mockUpdateUser: vi.fn(),
@@ -132,7 +148,17 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     replace: mockRouterReplace,
   }),
-  useSearchParams: () => mockSearchParamsState.params,
+  useSearchParams: () => {
+    const [, forceUpdate] = React.useState(0);
+    React.useEffect(() => {
+      const listener = () => forceUpdate((n: number) => n + 1);
+      mockSearchParamsListeners.add(listener);
+      return () => {
+        mockSearchParamsListeners.delete(listener);
+      };
+    }, []);
+    return mockSearchParamsState.params;
+  },
 }));
 
 // Mock de supabase browser client para RestablecerContrasenaPage

@@ -196,4 +196,35 @@ Para que el restablecimiento de contraseña funcione de forma consistente entre 
 <p>Si no solicitaste este cambio, puedes ignorar este mensaje.</p>
 ```
 
+---
+
+## 12. Configuración de SMTP Propio en Supabase Auth
+
+Supabase incluye un servicio de correo predeterminado estrictamente para pruebas internas que **únicamente entrega correos a los miembros de la organización del proyecto** (y con un límite estricto de mensajes por hora). Además, en el plan gratuito de Supabase, las plantillas de correo (**Email Templates**) solo se pueden editar y personalizar si se habilita un servidor SMTP propio (*Custom SMTP*).
+
+Para habilitar el envío real y fiable a terceros (incluyendo recuperación de contraseña, invitaciones a personal y confirmaciones de cuenta para cualquier usuario externo):
+
+### Pasos de configuración con Gmail dedicado:
+1. **Crear o utilizar una cuenta de Gmail dedicada** (ej. `restauracore.notificaciones@gmail.com`).
+2. **Activar Verificación en dos pasos (2FA)** en la cuenta de Google (Seguridad -> Verificación en dos pasos).
+3. **Generar una Contraseña de Aplicación:**
+   - En la configuración de seguridad de Google, dirigirse a **Contraseñas de aplicaciones**.
+   - Crear una nueva (nombre: ej. `Supabase Auth`).
+   - Google generará una contraseña de 16 caracteres.
+4. **Configurar Custom SMTP en Supabase Dashboard:**
+   - Ir a **Project Settings** -> **Authentication** -> sección **SMTP Settings**.
+   - Activar la casilla **Enable Custom SMTP**.
+   - **Sender email:** La dirección de Gmail del paso 1 (ej. `restauracore.notificaciones@gmail.com`). *El remitente debe ser igual al usuario autenticado en SMTP.*
+   - **Sender name:** `RestauraCore` (o el nombre comercial de la plataforma).
+   - **Host:** `smtp.gmail.com`
+   - **Port number:** `465`
+   - **User:** La dirección de Gmail completa (ej. `restauracore.notificaciones@gmail.com`).
+   - **Password:** La contraseña de aplicación de 16 caracteres generada en el paso 3 (sin espacios). *Nunca registrar contraseñas reales ni secretos en el repositorio.*
+5. **Guardar cambios.**
+
+> [!IMPORTANT]
+> **Prueba obligatoria con correo ajeno:**  
+> Antes de dar por cerrada la tarea, debe probarse la recuperación de contraseña solicitándola para un correo ajeno (que no pertenezca a la organización ni a los administradores del proyecto en Supabase) para certificar la recepción real del correo y validar que el enlace abre `/restablecer-contrasena` con el formulario de nueva contraseña listo.
+
+
 

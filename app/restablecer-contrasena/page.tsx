@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useTransition } from "react";
+import React, { useState, useEffect, useRef, Suspense, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,6 +22,30 @@ function RestablecerContrasenaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Guardas para capturar los parámetros de recuperación una sola vez al montar
+  // y evitar que la posterior limpieza de la URL (router.replace) re-ejecute el efecto
+  // y marque erróneamente el estado como "invalido".
+  const paramsInicialesRef = useRef<{
+    tokenHash: string | null;
+    typeParam: string | null;
+    code: string | null;
+    qError: string | null;
+    qErrorDesc: string | null;
+  } | null>(null);
+
+  if (!paramsInicialesRef.current) {
+    paramsInicialesRef.current = {
+      tokenHash: searchParams.get("token_hash"),
+      typeParam: searchParams.get("type"),
+      code: searchParams.get("code"),
+      qError: searchParams.get("error"),
+      qErrorDesc: searchParams.get("error_description"),
+    };
+  }
+
+  const verificadoExitosoRef = useRef(false);
+  const verificacionIniciadaRef = useRef(false);
+
   // Estados: "verificando" | "listo" | "invalido" | "exito"
   const [estado, setEstado] = useState<"verificando" | "listo" | "invalido" | "exito">("verificando");
   const [haySesionAbierta, setHaySesionAbierta] = useState(false);
@@ -33,6 +57,21 @@ function RestablecerContrasenaContent() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
+    // Si ya fue verificado exitosamente (por ejemplo tras router.replace que limpió searchParams),
+    // no volver a procesar ni marcar como inválido
+    if (verificadoExitosoRef.current) {
+      if (estado !== "listo" && estado !== "exito") {
+        setEstado("listo");
+      }
+      return;
+    }
+
+    // Guarda contra doble ejecución en React StrictMode (desarrollo)
+    if (verificacionIniciadaRef.current) {
+      return;
+    }
+    verificacionIniciadaRef.current = true;
+
     let cancelado = false;
     let timer: NodeJS.Timeout | null = null;
     let subscription: { unsubscribe: () => void } | null = null;
@@ -49,9 +88,9 @@ function RestablecerContrasenaContent() {
         }
       } catch {}
 
+      const { tokenHash, typeParam, code, qError, qErrorDesc } = paramsInicialesRef.current!;
+
       // 1. Verificar si la URL ya reporta error de Supabase en query params
-      const qError = searchParams.get("error");
-      const qErrorDesc = searchParams.get("error_description");
       if (qError || qErrorDesc) {
         if (!cancelado) {
           setEstado("invalido");
@@ -81,8 +120,6 @@ function RestablecerContrasenaContent() {
       }
 
       // 3. Manejo del flujo verifyOtp: ?token_hash=...&type=recovery (compatible entre dispositivos)
-      const tokenHash = searchParams.get("token_hash");
-      const typeParam = searchParams.get("type");
       if (tokenHash) {
         if (typeParam !== "recovery") {
           if (!cancelado) {
@@ -111,13 +148,12 @@ function RestablecerContrasenaContent() {
             return;
           }
 
-          if (!cancelado) {
-            setEstado("listo");
-            // Quitar token_hash de la URL para que un refresh no reintente el token
-            try {
-              router.replace("/restablecer-contrasena");
-            } catch {}
-          }
+          verificadoExitosoRef.current = true;
+          setEstado("listo");
+          // Quitar token_hash de la URL para que un refresh no reintente el token
+          try {
+            router.replace("/restablecer-contrasena");
+          } catch {}
           return;
         } catch (err: any) {
           console.error("[RESTABLECER_CONTRASENA] Excepción al verificar token_hash:", err);
@@ -130,7 +166,6 @@ function RestablecerContrasenaContent() {
       }
 
       // 4. Manejo del flujo PKCE: intercambio seguro del parámetro ?code= por sesión de recuperación
-      const code = searchParams.get("code");
       if (code) {
         try {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -145,12 +180,11 @@ function RestablecerContrasenaContent() {
             return;
           }
 
-          if (!cancelado) {
-            setEstado("listo");
-            try {
-              router.replace("/restablecer-contrasena");
-            } catch {}
-          }
+          verificadoExitosoRef.current = true;
+          setEstado("listo");
+          try {
+            router.replace("/restablecer-contrasena");
+          } catch {}
           return;
         } catch (err: any) {
           console.error("[RESTABLECER_CONTRASENA] Excepción al intercambiar código:", err);
@@ -172,6 +206,7 @@ function RestablecerContrasenaContent() {
         const authListener = supabase.auth.onAuthStateChange((event) => {
           if (cancelado) return;
           if (event === "PASSWORD_RECOVERY") {
+            verificadoExitosoRef.current = true;
             setEstado("listo");
           }
         });
@@ -210,7 +245,7 @@ function RestablecerContrasenaContent() {
       if (subscription) subscription.unsubscribe();
       if (timer) clearTimeout(timer);
     };
-  }, [searchParams]);
+  }, [searchParams, estado]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
