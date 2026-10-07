@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { cookies } from "next/headers";
 import { UnauthorizedError } from "@/lib/errors";
 import { z, validateOrThrow } from "@/lib/validation";
+import { registrarEventoSistema } from "@/lib/log-sistema";
 
 export type RolTipo =
   | "mesero"
@@ -216,16 +217,30 @@ export async function invitarPersonalAction(input: {
 
   // 2. Usuario NO existe en el sistema: invitar vía Supabase Auth Admin oficial
   const supabaseAdmin = createSupabaseAdminClient();
-  const { data: inviteData, error: inviteError } =
-    await supabaseAdmin.auth.admin.inviteUserByEmail(emailLower, {
+  let inviteData: any = null;
+  let inviteError: any = null;
+  try {
+    const res = await supabaseAdmin.auth.admin.inviteUserByEmail(emailLower, {
       data: {
         nombre: validado.nombre,
         rol: validado.rol,
       },
     });
+    inviteData = res.data;
+    inviteError = res.error;
+  } catch (err: any) {
+    inviteError = err;
+  }
 
   if (inviteError) {
-    throw new Error(`Error al enviar invitación por correo: ${inviteError.message}`);
+    await registrarEventoSistema({
+      tipo: "FALLO_ENVIO_CORREO_AUTH",
+      origen: "invitacion_personal",
+      email: emailLower,
+      error: inviteError,
+      metadata: { restaurante_id },
+    });
+    throw new Error(`Error al enviar invitación por correo: ${inviteError.message || String(inviteError)}`);
   }
 
   const authUserId = inviteData.user.id;

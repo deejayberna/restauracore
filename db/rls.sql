@@ -51,6 +51,8 @@ ALTER TABLE tickets_soporte              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS clientes_telegram  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS vinculaciones_telegram_pendientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS recordatorios_trial_enviados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS log_sistema            ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE log_sistema FROM anon, authenticated;
 
 
 -- ─── 3. TRIGGERS DEL SISTEMA ──────────────────────────────────

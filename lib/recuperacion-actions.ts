@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { checkRateLimitRecuperacion } from "@/lib/rate-limiter";
 import { validarTurnstileToken } from "@/lib/turnstile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { registrarEventoSistema } from "@/lib/log-sistema";
 
 const MENSAJE_GENERICO_RECUPERACION =
   "Si ese correo tiene una cuenta, te enviaremos un enlace para restablecer tu contraseña";
@@ -97,6 +98,14 @@ export async function solicitarRecuperacionAction(
     });
 
     if (error) {
+      await registrarEventoSistema({
+        tipo: "FALLO_ENVIO_CORREO_AUTH",
+        origen: "recuperacion_contrasena",
+        email: cleanEmail,
+        ip,
+        error,
+      });
+
       console.error("[RECUPERACION_CONTRASENA_ERROR]", {
         tag: "RECUPERACION_ERROR",
         paso: "RESET_PASSWORD_FOR_EMAIL",
@@ -106,6 +115,14 @@ export async function solicitarRecuperacionAction(
       });
     }
   } catch (err: any) {
+    await registrarEventoSistema({
+      tipo: "FALLO_ENVIO_CORREO_AUTH",
+      origen: "recuperacion_contrasena",
+      email: cleanEmail,
+      ip,
+      error: err,
+    });
+
     console.error("[RECUPERACION_CONTRASENA_ERROR]", {
       tag: "RECUPERACION_ERROR",
       paso: "RESET_PASSWORD_FOR_EMAIL_EXCEPTION",

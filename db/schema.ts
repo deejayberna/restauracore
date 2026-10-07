@@ -556,6 +556,26 @@ export const vinculacionesTelegramPendientes = pgTable(
   ]
 );
 
+export const logSistema = pgTable(
+  "log_sistema",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipo: text("tipo").notNull(),
+    origen: text("origen").notNull(), // 'alta_registro' | 'recuperacion_contrasena' | 'invitacion_personal'
+    servicio: text("servicio").default("supabase_auth_smtp"),
+    email_dominio: text("email_dominio"),
+    estado_http: integer("estado_http"),
+    codigo_error: text("codigo_error"),
+    mensaje_error: text("mensaje_error"),
+    ip_origen: text("ip_origen"),
+    metadata: jsonb("metadata"),
+    creado_en: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_log_sistema_tipo_creado_en").on(table.tipo, table.creado_en.desc()),
+  ]
+);
+
 // ─── Relaciones ──────────────────────────────────────────────────────────────
 
 

@@ -17,6 +17,7 @@ import * as crypto from "crypto";
 import { checkRateLimitRegistro } from "@/lib/rate-limiter";
 import { validarTurnstileToken } from "@/lib/turnstile";
 import { cookies, headers } from "next/headers";
+import { registrarEventoSistema } from "@/lib/log-sistema";
 
 const RegistroSchema = z.object({
   nombreRestaurante: z.string().min(2, "El nombre del restaurante debe tener al menos 2 caracteres"),
@@ -185,6 +186,13 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
 
       if (resendError) {
         logErrorRegistro("ENVIAR_CORREO_CONFIRMACION", resendError, cleanEmail);
+        await registrarEventoSistema({
+          tipo: "FALLO_ENVIO_CORREO_AUTH",
+          origen: "alta_registro",
+          email: cleanEmail,
+          error: resendError,
+          ip,
+        });
         if (createdAuthUserId && supabaseAdmin) {
           try {
             await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
@@ -199,6 +207,13 @@ export async function registrarRestauranteDirectoAction(input: RegistroInput) {
       }
     } catch (resendEx: any) {
       logErrorRegistro("ENVIAR_CORREO_CONFIRMACION", resendEx, cleanEmail);
+      await registrarEventoSistema({
+        tipo: "FALLO_ENVIO_CORREO_AUTH",
+        origen: "alta_registro",
+        email: cleanEmail,
+        error: resendEx,
+        ip,
+      });
       if (createdAuthUserId && supabaseAdmin) {
         try {
           await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
