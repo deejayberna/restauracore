@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { logSistema } from "@/db/schema";
-import type { AuthError } from "@supabase/supabase-js";
+import { AuthRetryableFetchError, type AuthError } from "@supabase/supabase-js";
 
 export type OrigenEventoSistema =
   | "alta_registro"
@@ -18,6 +18,51 @@ export interface EventoSistemaInput {
 }
 
 /**
+ * Sanitiza cualquier texto antes de ser persistido en base de datos.
+ * Elimina:
+ * 1. URLs completas (incluyendo query parameters con tokens/hashes).
+ * 2. Direcciones de correo electrónico.
+ * 3. Tokens JWT (formato ey...).
+ * 4. Secuencias largas alfanuméricas continuas (>= 20 caracteres) tipo hash/token.
+ */
+export function sanitizarTextoSeguro(texto?: string | null): string | null {
+  if (!texto || typeof texto !== "string") return null;
+  return texto
+    // 1. Eliminar URLs (http://, https://, ftp://)
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL_ELIMINADA]")
+    .replace(/ftp:\/\/[^\s"'<>]+/gi, "[URL_ELIMINADA]")
+    // 2. Eliminar direcciones de correo electrónico
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "[CORREO_ELIMINADO]")
+    // 3. Eliminar tokens JWT (eyJ...)
+    .replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, "[TOKEN_ELIMINADO]")
+    // 4. Eliminar secuencias alfanuméricas largas (hashes MD5/SHA, tokens >= 20 caracteres)
+    .replace(/\b[a-zA-Z0-9_]{20,}\b/g, "[TOKEN_ELIMINADO]")
+    .trim();
+}
+
+/**
+ * Sanitiza recursivamente cualquier estructura de datos en metadata para eliminar
+ * correos, URLs y tokens en todas las propiedades de texto.
+ */
+export function sanitizarMetadata(data: any): any {
+  if (data === null || data === undefined) return data;
+  if (typeof data === "string") {
+    return sanitizarTextoSeguro(data);
+  }
+  if (Array.isArray(data)) {
+    return data.map(sanitizarMetadata);
+  }
+  if (typeof data === "object") {
+    const sanitizado: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      sanitizado[key] = sanitizarMetadata(value);
+    }
+    return sanitizado;
+  }
+  return data;
+}
+
+/**
  * Extrae estrictamente la porción del dominio de un correo electrónico.
  * Retorna null si el correo no tiene formato válido o falta el dominio.
  * Garantiza que NUNCA se preserve la parte local (nombre de usuario) ni el correo completo.
@@ -32,18 +77,26 @@ export function extraerDominioEmail(email?: string | null): string | null {
 /**
  * Criterio de clasificación de errores de Supabase Auth para registro de fallos de servicio.
  *
- * REGLAS DE CLASIFICACIÓN (Usa error.status y error.code de AuthError):
- * - NO registra límites de frecuencia: status === 429, code === "over_email_send_rate_limit", code === "over_request_rate_limit".
- * - NO registra correos inexistentes ni validaciones de usuario: code === "user_not_found", "email_not_found", "validation_failed", etc.
- * - SÍ registra fallos de servicio/transporte de correo:
- *     * status >= 500 y status < 600 (errores internos de backend o servidor SMTP)
- *     * code === "email_provider_disabled" o "unexpected_failure"
+ * TABLA DE CRITERIOS:
+ * - IGNORAR (false):
+ *     * Límites de frecuencia: status === 429, code === "over_email_send_rate_limit" o "over_request_rate_limit"
+ *     * Errores de cliente HTTP 4xx (400-499)
+ *     * Errores de entidad/validación de usuario: code === "user_not_found", "email_not_found",
+ *       "validation_failed", "invalid_credentials", "bad_jwt", "signup_disabled", etc.
+ * - CONTAR COMO FALLO DE SERVICIO (true):
+ *     * Status HTTP 5xx (500-599): fallos del servidor Supabase o backend downstream SMTP
+ *     * Códigos de servicio: code === "email_provider_disabled" o "unexpected_failure"
+ *     * Errores de red o timeout hacia Supabase:
+ *         - Instancia de AuthRetryableFetchError o error.name === "AuthRetryableFetchError"
+ *         - status === 0 (fallo de fetch/red sin código HTTP)
+ *         - status === undefined / null (sin status, tras descartar códigos de cliente y rate limits)
  */
 export function esFalloServicioCorreo(error: any): boolean {
   if (!error) return false;
 
   const status = typeof error.status === "number" ? error.status : undefined;
   const code = typeof error.code === "string" ? error.code : undefined;
+  const name = typeof error.name === "string" ? error.name : "";
 
   // 1. Excluir rate limits (429 y códigos de frecuencia)
   if (
@@ -54,27 +107,46 @@ export function esFalloServicioCorreo(error: any): boolean {
     return false;
   }
 
-  // 2. Excluir errores de entidad/cliente y correos no encontrados
-  if (
-    code === "user_not_found" ||
-    code === "email_not_found" ||
-    code === "validation_failed" ||
-    code === "invalid_credentials" ||
-    code === "bad_jwt" ||
-    (status !== undefined && status >= 400 && status < 500)
-  ) {
+  // 2. Excluir errores de entidad/cliente y validaciones conocidas
+  const codigosClienteIgnorados = [
+    "user_not_found",
+    "email_not_found",
+    "validation_failed",
+    "invalid_credentials",
+    "bad_jwt",
+    "signup_disabled",
+    "user_already_exists",
+    "weak_password",
+    "same_password",
+  ];
+  if (code && codigosClienteIgnorados.includes(code)) {
     return false;
   }
 
-  // 3. Status 5xx: fallos reales del servidor o servicio de envío
+  // 3. Excluir errores HTTP 4xx (errores imputables al cliente)
+  if (status !== undefined && status >= 400 && status < 500) {
+    return false;
+  }
+
+  // 4. Fallos reales del servidor HTTP 5xx (backend o SMTP downstream)
   if (status !== undefined && status >= 500 && status < 600) {
     return true;
   }
 
-  // 4. Códigos específicos de fallo de proveedor o servicio de correo
+  // 5. Códigos específicos de fallo de servicio de Supabase Auth
   if (
     code === "email_provider_disabled" ||
     code === "unexpected_failure"
+  ) {
+    return true;
+  }
+
+  // 6. Errores de red, timeout o fetch hacia Supabase (AuthRetryableFetchError, status 0 o sin status)
+  if (
+    name === "AuthRetryableFetchError" ||
+    (error instanceof AuthRetryableFetchError) ||
+    status === 0 ||
+    status === undefined
   ) {
     return true;
   }
@@ -86,6 +158,7 @@ export function esFalloServicioCorreo(error: any): boolean {
  * Asienta de forma segura y resiliente un evento de infraestructura o fallo de autenticación en log_sistema.
  *
  * Características de seguridad y resiliencia:
+ * - Sanitiza mensaje_error y metadata (eliminando correos, URLs y tokens/hashes).
  * - Nunca lanza excepción ni interrumpe el flujo principal.
  * - Espera con await dentro de try/catch (no fire-and-forget para no ser cancelado en Vercel Serverless).
  * - Protegido por un timeout estricto de 2000 ms.
@@ -102,7 +175,9 @@ export async function registrarEventoSistema(input: EventoSistemaInput): Promise
     const estadoHttp = typeof error?.status === "number" ? error.status : null;
     const codigoError = typeof error?.code === "string" ? error.code.slice(0, 100) : null;
     const mensajeCrudo = error?.message ? String(error.message) : (error ? String(error) : null);
-    const mensajeError = mensajeCrudo ? mensajeCrudo.slice(0, 200) : null;
+    const mensajeSanitizado = mensajeCrudo ? sanitizarTextoSeguro(mensajeCrudo) : null;
+    const mensajeError = mensajeSanitizado ? mensajeSanitizado.slice(0, 200) : null;
+    const metadataSanitizada = input.metadata ? sanitizarMetadata(input.metadata) : null;
 
     // Timeout de 2 segundos para no demorar la respuesta de la Server Action
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -118,7 +193,7 @@ export async function registrarEventoSistema(input: EventoSistemaInput): Promise
       codigo_error: codigoError,
       mensaje_error: mensajeError,
       ip_origen: input.ip ? input.ip.slice(0, 45) : null,
-      metadata: input.metadata || null,
+      metadata: metadataSanitizada,
     });
 
     await Promise.race([insertPromise, timeoutPromise]);
@@ -132,4 +207,3 @@ export async function registrarEventoSistema(input: EventoSistemaInput): Promise
     });
   }
 }
-

@@ -6,8 +6,10 @@ import {
   registrarEventoSistema,
   esFalloServicioCorreo,
   extraerDominioEmail,
+  sanitizarTextoSeguro,
+  sanitizarMetadata,
 } from "@/lib/log-sistema";
-import { AuthApiError } from "@supabase/supabase-js";
+import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 
 describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () => {
   const idsCreados: string[] = [];
@@ -22,7 +24,7 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
     }
   });
 
-  describe("1. Clasificación estricta de errores (error.status y error.code)", () => {
+  describe("1. Clasificación estricta de errores (error.status, error.code, red y timeouts)", () => {
     it("clasifica como fallo real de servicio status 5xx", () => {
       const err500 = new AuthApiError("Internal Server Error", 500, "unexpected_failure");
       const err502 = new AuthApiError("Bad Gateway SMTP", 502, "bad_gateway");
@@ -33,9 +35,29 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       expect(esFalloServicioCorreo(err503)).toBe(true);
     });
 
-    it("clasifica como fallo real código email_provider_disabled", () => {
+    it("clasifica como fallo real código email_provider_disabled y unexpected_failure", () => {
       const errDisabled = { code: "email_provider_disabled", message: "Email provider is disabled" };
+      const errUnexpected = { code: "unexpected_failure", message: "Unexpected failure in backend" };
       expect(esFalloServicioCorreo(errDisabled)).toBe(true);
+      expect(esFalloServicioCorreo(errUnexpected)).toBe(true);
+    });
+
+    it("clasifica como fallo real errores de red o tiempo de espera hacia Supabase (AuthRetryableFetchError, status 0 o sin status)", () => {
+      // Instancia de AuthRetryableFetchError
+      const errRetryableInstance = new AuthRetryableFetchError("Network request failed", 0);
+      expect(esFalloServicioCorreo(errRetryableInstance)).toBe(true);
+
+      // Objeto con name AuthRetryableFetchError
+      const errRetryableName = { name: "AuthRetryableFetchError", message: "Failed to fetch" };
+      expect(esFalloServicioCorreo(errRetryableName)).toBe(true);
+
+      // Error con status 0 (típico de fetch offline o CORS bloqueado)
+      const errStatusCero = { status: 0, message: "Network connection refused" };
+      expect(esFalloServicioCorreo(errStatusCero)).toBe(true);
+
+      // Error sin status (Error estándar de Node/fetch como ETIMEDOUT / ECONNREFUSED)
+      const errSinStatus = new Error("connect ETIMEDOUT 104.18.25.10:443");
+      expect(esFalloServicioCorreo(errSinStatus)).toBe(true);
     });
 
     it("NO clasifica como fallo de servicio los límites de frecuencia (429 y rate limit codes)", () => {
@@ -53,21 +75,48 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       const errEmailNotFound = { code: "email_not_found", message: "Email not found" };
       const errValidation = new AuthApiError("Validation failed", 422, "validation_failed");
       const errCreds = new AuthApiError("Invalid login credentials", 400, "invalid_credentials");
+      const errForbidden = { status: 403, message: "Forbidden action" };
 
       expect(esFalloServicioCorreo(errNotFound)).toBe(false);
       expect(esFalloServicioCorreo(errEmailNotFound)).toBe(false);
       expect(esFalloServicioCorreo(errValidation)).toBe(false);
       expect(esFalloServicioCorreo(errCreds)).toBe(false);
+      expect(esFalloServicioCorreo(errForbidden)).toBe(false);
     });
   });
 
-  describe("2. Extracción de dominio de correo (privacidad)", () => {
+  describe("2. Sanitización y extracción de dominio (privacidad estricta)", () => {
     it("extrae exclusivamente el dominio sin parte local ni arroba", () => {
       expect(extraerDominioEmail("usuario.secreto@ejemplo.com")).toBe("ejemplo.com");
       expect(extraerDominioEmail("Admin+tag@DOMINIO.ORG")).toBe("dominio.org");
       expect(extraerDominioEmail("invalido")).toBeNull();
       expect(extraerDominioEmail("")).toBeNull();
       expect(extraerDominioEmail(null)).toBeNull();
+    });
+
+    it("sanitizarTextoSeguro elimina correos, URLs, tokens JWT y hashes largos", () => {
+      const texto =
+        "Error en https://auth.supabase.co/verify?token=pk_live_sec1234567890abcdef1234567890 para el correo usuario.privado@empresa.com con hash a3f5b2c9d0e1f2a3b4c5d6e7f8a9b0c1";
+      const limpio = sanitizarTextoSeguro(texto);
+
+      expect(limpio).not.toBeNull();
+      expect(limpio).not.toContain("https://auth.supabase.co");
+      expect(limpio).not.toContain("pk_live_sec1234567890abcdef1234567890");
+      expect(limpio).not.toContain("usuario.privado@empresa.com");
+      expect(limpio).not.toContain("a3f5b2c9d0e1f2a3b4c5d6e7f8a9b0c1");
+    });
+
+    it("sanitizarMetadata limpia recursivamente objetos y arrays", () => {
+      const meta = {
+        callback_url: "https://miapp.com/auth/callback?token=secret12345678901234567890",
+        contacto: "soporte@dominio.com",
+        lista: ["otra_url: https://api.otro.com/v1", "normal"],
+      };
+
+      const metaLimpia = sanitizarMetadata(meta);
+      expect(metaLimpia.callback_url).not.toContain("https://miapp.com");
+      expect(metaLimpia.contacto).not.toContain("soporte@dominio.com");
+      expect(metaLimpia.lista[0]).not.toContain("https://api.otro.com");
     });
   });
 
@@ -120,22 +169,23 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       }
     });
 
-    it("garantiza que NINGÚN campo guardado contiene el correo completo, contraseñas, tokens de Turnstile ni enlaces", async () => {
-      const correoSensible = "secreto.usuario.123@corporativo-privado.com";
-      const errorConDetalle = new AuthApiError(
-        "Fallo de conexión SMTP hacia smtp.servidor.com:465 tras intento con password de app",
-        500,
-        "unexpected_failure"
-      );
+    it("garantiza que un mensaje de error con un correo y una URL con token NO quedan guardados", async () => {
+      const correoFuga = "fuga.secreta@corporativo-privado.com";
+      const tokenFuga = "sec_tok_9876543210fedcba9876543210";
+      const urlFuga = `https://supabase.internal/auth/v1/verify?token=${tokenFuga}&redirect_to=https://app.com`;
+      const mensajePeligroso = `Fallo al enviar a ${correoFuga} mediante ${urlFuga} con hash 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d`;
+
+      const errorConFugas = new AuthApiError(mensajePeligroso, 500, "unexpected_failure");
 
       await registrarEventoSistema({
         tipo: "FALLO_ENVIO_CORREO_AUTH",
         origen: "alta_registro",
-        email: correoSensible,
-        error: errorConDetalle,
+        email: "otro.usuario@corporativo-privado.com",
+        error: errorConFugas,
         ip: "198.51.100.22",
         metadata: {
-          motivo: "error_servidor",
+          url_redireccion: urlFuga,
+          correo_destino: correoFuga,
         },
       });
 
@@ -149,27 +199,21 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       expect(fila).toBeDefined();
       idsCreados.push(fila.id);
 
-      // Inspección exhaustiva de todos los valores de la fila
-      const textoCompletoFila = JSON.stringify(fila).toLowerCase();
+      // Verificación exhaustiva: ni mensaje_error ni metadata guardan el correo ni la URL con token
+      const filaJson = JSON.stringify(fila).toLowerCase();
 
-      // 1. Correo completo nunca presente
-      expect(textoCompletoFila).not.toContain(correoSensible.toLowerCase());
-      expect(textoCompletoFila).not.toContain("secreto.usuario.123");
+      // Correo no guardado
+      expect(filaJson).not.toContain(correoFuga.toLowerCase());
+      expect(fila.mensaje_error).not.toContain(correoFuga);
 
-      // 2. Sin passwords reales ni hashes
-      expect(textoCompletoFila).not.toContain("password123");
-      expect(textoCompletoFila).not.toContain("scrypt");
+      // URL no guardada
+      expect(filaJson).not.toContain("https://supabase.internal");
+      expect(fila.mensaje_error).not.toContain("https://supabase.internal");
 
-      // 3. Sin tokens de Turnstile
-      expect(textoCompletoFila).not.toContain("0.xxxx");
-
-      // 4. Sin token_hash de recuperación
-      expect(textoCompletoFila).not.toContain("token_hash");
-      expect(textoCompletoFila).not.toContain("type=recovery");
-
-      // 5. Sin enlaces HTTP/HTTPS
-      expect(textoCompletoFila).not.toContain("http://");
-      expect(textoCompletoFila).not.toContain("https://");
+      // Token no guardado
+      expect(filaJson).not.toContain(tokenFuga.toLowerCase());
+      expect(fila.mensaje_error).not.toContain(tokenFuga);
+      expect(fila.mensaje_error).not.toContain("1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d");
     });
 
     it("errores 429 y de validación NO generan ninguna fila en log_sistema", async () => {
@@ -299,3 +343,4 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
     });
   });
 });
+
