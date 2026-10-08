@@ -8,6 +8,7 @@ import {
   extraerDominioEmail,
   sanitizarTextoSeguro,
   sanitizarMetadata,
+  cuentaParaSemaforo,
 } from "@/lib/log-sistema";
 import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 
@@ -42,7 +43,7 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       expect(esFalloServicioCorreo(errUnexpected)).toBe(true);
     });
 
-    it("clasifica como fallo real errores de red o tiempo de espera hacia Supabase (AuthRetryableFetchError, status 0 o sin status)", () => {
+    it("clasifica como fallo real errores de red conocidos hacia Supabase (AuthRetryableFetchError, fetch failed, timeouts, ECONNRESET, ENOTFOUND)", () => {
       // Instancia de AuthRetryableFetchError
       const errRetryableInstance = new AuthRetryableFetchError("Network request failed", 0);
       expect(esFalloServicioCorreo(errRetryableInstance)).toBe(true);
@@ -51,13 +52,34 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       const errRetryableName = { name: "AuthRetryableFetchError", message: "Failed to fetch" };
       expect(esFalloServicioCorreo(errRetryableName)).toBe(true);
 
-      // Error con status 0 (típico de fetch offline o CORS bloqueado)
+      // Error con status 0
       const errStatusCero = { status: 0, message: "Network connection refused" };
       expect(esFalloServicioCorreo(errStatusCero)).toBe(true);
 
-      // Error sin status (Error estándar de Node/fetch como ETIMEDOUT / ECONNREFUSED)
-      const errSinStatus = new Error("connect ETIMEDOUT 104.18.25.10:443");
-      expect(esFalloServicioCorreo(errSinStatus)).toBe(true);
+      // Error con "fetch failed"
+      const errFetchFailed = new TypeError("fetch failed");
+      expect(esFalloServicioCorreo(errFetchFailed)).toBe(true);
+
+      // Timeout / ETIMEDOUT
+      const errTimeout = new Error("connect ETIMEDOUT 104.18.25.10:443");
+      expect(esFalloServicioCorreo(errTimeout)).toBe(true);
+
+      // ECONNRESET
+      const errConnReset = new Error("read ECONNRESET");
+      expect(esFalloServicioCorreo(errConnReset)).toBe(true);
+
+      // ENOTFOUND
+      const errNotFoundNet = new Error("getaddrinfo ENOTFOUND api.supabase.co");
+      expect(esFalloServicioCorreo(errNotFoundNet)).toBe(true);
+    });
+
+    it("NO clasifica como fallo de servicio una excepción interna no relacionada con red", () => {
+      // Una excepción interna de lógica de código no es fallo de red ni de transporte SMTP
+      const errTypeError = new TypeError("Cannot read properties of undefined (reading 'token')");
+      const errSyntax = new SyntaxError("Unexpected token in JSON");
+
+      expect(esFalloServicioCorreo(errTypeError)).toBe(false);
+      expect(esFalloServicioCorreo(errSyntax)).toBe(false);
     });
 
     it("NO clasifica como fallo de servicio los límites de frecuencia (429 y rate limit codes)", () => {
@@ -92,6 +114,25 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
       expect(extraerDominioEmail("invalido")).toBeNull();
       expect(extraerDominioEmail("")).toBeNull();
       expect(extraerDominioEmail(null)).toBeNull();
+    });
+
+    it("sanitiza cadena realista de Gmail conservando causa legible y removiendo URL", () => {
+      const gmailMsg =
+        '535 "5.7.8 Username and Password not accepted. For more information, go to 5.7.8 https://support.google.com/mail/?p=BadCredentials d9443c01a7336-2e6046fe0a3sm16861125ad.26 - gsmtp"';
+      const sanitizado = sanitizarTextoSeguro(gmailMsg);
+
+      expect(sanitizado).not.toBeNull();
+      // Debe conservar la causa legible
+      expect(sanitizado).toContain('535 "5.7.8 Username and Password not accepted');
+      // Debe quitar la URL
+      expect(sanitizado).not.toContain("https://support.google.com");
+      expect(sanitizado).toContain("[URL_ELIMINADA]");
+    });
+
+    it("conserva códigos legibles del sistema sin borrarlos como tokens", () => {
+      expect(sanitizarTextoSeguro("email_provider_disabled")).toBe("email_provider_disabled");
+      expect(sanitizarTextoSeguro("over_email_send_rate_limit")).toBe("over_email_send_rate_limit");
+      expect(sanitizarTextoSeguro("unexpected_failure")).toBe("unexpected_failure");
     });
 
     it("sanitizarTextoSeguro elimina correos, URLs, tokens JWT y hashes largos", () => {
@@ -167,6 +208,64 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
           expect((fila.metadata as any)?.restaurante_id).toBe("c0000000-0000-0000-0000-000000000001");
         }
       }
+    });
+
+    it("registra excepciones internas con codigo_error EXCEPCION_INTERNA y no cuenta para el semáforo", async () => {
+      const errInterno = new TypeError("Cannot read properties of undefined (reading 'user')");
+
+      await registrarEventoSistema({
+        tipo: "FALLO_ENVIO_CORREO_AUTH",
+        origen: "alta_registro",
+        email: "usuario.excepcion@empresa-prueba.com",
+        error: errInterno,
+        ip: "192.0.2.1",
+      });
+
+      const [fila] = await db
+        .select()
+        .from(logSistema)
+        .where(eq(logSistema.email_dominio, "empresa-prueba.com"))
+        .orderBy(desc(logSistema.creado_en))
+        .limit(1);
+
+      expect(fila).toBeDefined();
+      idsCreados.push(fila.id);
+
+      // Verificación de código de error asignado
+      expect(fila.codigo_error).toBe("EXCEPCION_INTERNA");
+      expect(fila.mensaje_error).toContain("Cannot read properties of undefined");
+
+      // Criterio del semáforo: NO cuenta para el semáforo
+      expect(cuentaParaSemaforo(fila)).toBe(false);
+    });
+
+    it("registra fallos de red conocidos y SÍ cuentan para el semáforo", async () => {
+      const errRed = new Error("fetch failed");
+
+      await registrarEventoSistema({
+        tipo: "FALLO_ENVIO_CORREO_AUTH",
+        origen: "recuperacion_contrasena",
+        email: "usuario.red@proveedor-caido.com",
+        error: errRed,
+        ip: "192.0.2.2",
+      });
+
+      const [fila] = await db
+        .select()
+        .from(logSistema)
+        .where(eq(logSistema.email_dominio, "proveedor-caido.com"))
+        .orderBy(desc(logSistema.creado_en))
+        .limit(1);
+
+      expect(fila).toBeDefined();
+      idsCreados.push(fila.id);
+
+      // No es excepción interna
+      expect(fila.codigo_error).not.toBe("EXCEPCION_INTERNA");
+      expect(fila.mensaje_error).toContain("fetch failed");
+
+      // Criterio del semáforo: SÍ cuenta para el semáforo
+      expect(cuentaParaSemaforo(fila)).toBe(true);
     });
 
     it("garantiza que un mensaje de error con un correo y una URL con token NO quedan guardados", async () => {
@@ -343,4 +442,3 @@ describe("Parte 2: Tabla log_sistema y Clasificación de Fallos de Correo", () =
     });
   });
 });
-

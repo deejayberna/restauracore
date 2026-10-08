@@ -20,23 +20,35 @@ export interface EventoSistemaInput {
 /**
  * Sanitiza cualquier texto antes de ser persistido en base de datos.
  * Elimina:
- * 1. URLs completas (incluyendo query parameters con tokens/hashes).
+ * 1. URLs completas (incluyendo query parameters).
  * 2. Direcciones de correo electrónico.
  * 3. Tokens JWT (formato ey...).
- * 4. Secuencias largas alfanuméricas continuas (>= 20 caracteres) tipo hash/token.
+ * 4. Tokens con prefijos conocidos (sk_, pk_, tok_, sec_, key_).
+ * 5. Hashes hexadecimales (MD5, SHA1, SHA256 de 20+ caracteres).
+ * 6. Secuencias alfanuméricas continuas que combinan letras Y números (>= 20 caracteres).
+ *
+ * PRESERVA:
+ * - Códigos legibles en snake_case (ej. email_provider_disabled, unexpected_failure).
+ * - Textos de error de servidores SMTP (ej. 535 Username and Password not accepted).
+ * - Identificadores UUID estándar con guiones (ej. IDs de restaurante).
  */
 export function sanitizarTextoSeguro(texto?: string | null): string | null {
   if (!texto || typeof texto !== "string") return null;
   return texto
-    // 1. Eliminar URLs (http://, https://, ftp://)
+    // 1. Eliminar URLs (http://, https://, ftp://) con sus parámetros
     .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL_ELIMINADA]")
     .replace(/ftp:\/\/[^\s"'<>]+/gi, "[URL_ELIMINADA]")
     // 2. Eliminar direcciones de correo electrónico
     .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, "[CORREO_ELIMINADO]")
     // 3. Eliminar tokens JWT (eyJ...)
     .replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, "[TOKEN_ELIMINADO]")
-    // 4. Eliminar secuencias alfanuméricas largas (hashes MD5/SHA, tokens >= 20 caracteres)
-    .replace(/\b[a-zA-Z0-9_]{20,}\b/g, "[TOKEN_ELIMINADO]")
+    // 4. Tokens con prefijos conocidos (sk_, pk_, tok_, sec_, etc.)
+    .replace(/\b(?:sk_|pk_|tok_|sec_|key_)[a-zA-Z0-9_-]{16,}\b/gi, "[TOKEN_ELIMINADO]")
+    // 5. Hashes hexadecimales continuos (MD5, SHA1, SHA256 de 20+ caracteres)
+    .replace(/\b[a-fA-F0-9]{20,}\b/g, "[TOKEN_ELIMINADO]")
+    // 6. Secuencias alfanuméricas continuas que combinan letras Y dígitos (>= 20 caracteres)
+    // Se excluyen identificadores legibles en snake_case (que solo tienen letras y guiones bajos)
+    .replace(/\b(?=[a-zA-Z0-9_]*[0-9])(?=[a-zA-Z0-9_]*[a-zA-Z])[a-zA-Z0-9_]{20,}\b/g, "[TOKEN_ELIMINADO]")
     .trim();
 }
 
@@ -75,39 +87,24 @@ export function extraerDominioEmail(email?: string | null): string | null {
 }
 
 /**
- * Criterio de clasificación de errores de Supabase Auth para registro de fallos de servicio.
- *
- * TABLA DE CRITERIOS:
- * - IGNORAR (false):
- *     * Límites de frecuencia: status === 429, code === "over_email_send_rate_limit" o "over_request_rate_limit"
- *     * Errores de cliente HTTP 4xx (400-499)
- *     * Errores de entidad/validación de usuario: code === "user_not_found", "email_not_found",
- *       "validation_failed", "invalid_credentials", "bad_jwt", "signup_disabled", etc.
- * - CONTAR COMO FALLO DE SERVICIO (true):
- *     * Status HTTP 5xx (500-599): fallos del servidor Supabase o backend downstream SMTP
- *     * Códigos de servicio: code === "email_provider_disabled" o "unexpected_failure"
- *     * Errores de red o timeout hacia Supabase:
- *         - Instancia de AuthRetryableFetchError o error.name === "AuthRetryableFetchError"
- *         - status === 0 (fallo de fetch/red sin código HTTP)
- *         - status === undefined / null (sin status, tras descartar códigos de cliente y rate limits)
+ * Determina si el error corresponde a errores descartables de cliente o límites de frecuencia.
+ * Estos NUNCA generan ningún registro en log_sistema.
  */
-export function esFalloServicioCorreo(error: any): boolean {
-  if (!error) return false;
-
+export function esErrorClienteODescartable(error: any): boolean {
+  if (!error) return true;
   const status = typeof error.status === "number" ? error.status : undefined;
   const code = typeof error.code === "string" ? error.code : undefined;
-  const name = typeof error.name === "string" ? error.name : "";
 
-  // 1. Excluir rate limits (429 y códigos de frecuencia)
+  // 1. Límites de frecuencia (429 y códigos de rate limit)
   if (
     status === 429 ||
     code === "over_email_send_rate_limit" ||
     code === "over_request_rate_limit"
   ) {
-    return false;
+    return true;
   }
 
-  // 2. Excluir errores de entidad/cliente y validaciones conocidas
+  // 2. Errores de validación de entidad / credenciales / usuario
   const codigosClienteIgnorados = [
     "user_not_found",
     "email_not_found",
@@ -120,34 +117,11 @@ export function esFalloServicioCorreo(error: any): boolean {
     "same_password",
   ];
   if (code && codigosClienteIgnorados.includes(code)) {
-    return false;
+    return true;
   }
 
-  // 3. Excluir errores HTTP 4xx (errores imputables al cliente)
+  // 3. Códigos de respuesta HTTP 4xx (errores del cliente)
   if (status !== undefined && status >= 400 && status < 500) {
-    return false;
-  }
-
-  // 4. Fallos reales del servidor HTTP 5xx (backend o SMTP downstream)
-  if (status !== undefined && status >= 500 && status < 600) {
-    return true;
-  }
-
-  // 5. Códigos específicos de fallo de servicio de Supabase Auth
-  if (
-    code === "email_provider_disabled" ||
-    code === "unexpected_failure"
-  ) {
-    return true;
-  }
-
-  // 6. Errores de red, timeout o fetch hacia Supabase (AuthRetryableFetchError, status 0 o sin status)
-  if (
-    name === "AuthRetryableFetchError" ||
-    (error instanceof AuthRetryableFetchError) ||
-    status === 0 ||
-    status === undefined
-  ) {
     return true;
   }
 
@@ -155,25 +129,109 @@ export function esFalloServicioCorreo(error: any): boolean {
 }
 
 /**
+ * Detecta si un error corresponde a un error de red o timeout conocido hacia Supabase.
+ */
+export function esErrorRedConocido(error: any): boolean {
+  if (!error) return false;
+  if (error.name === "AuthRetryableFetchError" || (error instanceof AuthRetryableFetchError)) {
+    return true;
+  }
+  if (error.status === 0) {
+    return true;
+  }
+  const mensaje = String(error.message || error || "").toLowerCase();
+  const codigo = String(error.code || "").toLowerCase();
+
+  return (
+    mensaje.includes("fetch failed") ||
+    mensaje.includes("timeout") ||
+    mensaje.includes("etimedout") ||
+    mensaje.includes("econnreset") ||
+    mensaje.includes("enotfound") ||
+    mensaje.includes("econnrefused") ||
+    codigo === "etimedout" ||
+    codigo === "econnreset" ||
+    codigo === "enotfound" ||
+    codigo === "econnrefused"
+  );
+}
+
+/**
+ * Criterio de clasificación de errores para contabilizar fallos reales del servicio de correo.
+ *
+ * RETORNA TRUE (Cuenta para el semáforo):
+ * - HTTP 5xx (servidor / SMTP downstream)
+ * - Códigos de servicio: "email_provider_disabled" o "unexpected_failure"
+ * - Errores de red conocidos: AuthRetryableFetchError, status 0, "fetch failed", timeouts, ECONNRESET, ENOTFOUND
+ *
+ * RETORNA FALSE:
+ * - Límites de frecuencia (429, rate limits)
+ * - Errores de cliente (4xx, validación de usuario)
+ * - Excepciones internas del código que no son de red (éstas se registran como EXCEPCION_INTERNA sin contar para el semáforo)
+ */
+export function esFalloServicioCorreo(error: any): boolean {
+  if (!error) return false;
+  if (esErrorClienteODescartable(error)) return false;
+
+  const status = typeof error.status === "number" ? error.status : undefined;
+  const code = typeof error.code === "string" ? error.code : undefined;
+
+  // 1. Status 5xx (fallo en backend o transporte SMTP downstream)
+  if (status !== undefined && status >= 500 && status < 600) {
+    return true;
+  }
+
+  // 2. Códigos específicos de servicio de autenticación
+  if (code === "email_provider_disabled" || code === "unexpected_failure") {
+    return true;
+  }
+
+  // 3. Errores de red o timeout conocidos hacia Supabase
+  if (esErrorRedConocido(error)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Evalúa si un registro persistido en log_sistema cuenta para el semáforo de salud de correo (últimas 24h).
+ * Descarta registros marcados con 'EXCEPCION_INTERNA'.
+ */
+export function cuentaParaSemaforo(registro: { codigo_error?: string | null }): boolean {
+  return registro.codigo_error !== "EXCEPCION_INTERNA";
+}
+
+/**
  * Asienta de forma segura y resiliente un evento de infraestructura o fallo de autenticación en log_sistema.
  *
- * Características de seguridad y resiliencia:
+ * Reglas de persistencia:
+ * - Errores de cliente / 429 / validaciones: NUNCA se guardan.
+ * - Fallos reales de servicio (5xx, red conocida): se guardan con su código o código de red (CUENTAN para el semáforo).
+ * - Cualquier otra excepción interna: se guarda con codigo_error 'EXCEPCION_INTERNA' (NO cuenta para el semáforo).
  * - Sanitiza mensaje_error y metadata (eliminando correos, URLs y tokens/hashes).
- * - Nunca lanza excepción ni interrumpe el flujo principal.
- * - Espera con await dentro de try/catch (no fire-and-forget para no ser cancelado en Vercel Serverless).
- * - Protegido por un timeout estricto de 2000 ms.
- * - Si falla el INSERT, emite console.error con tag LOG_SISTEMA_ERROR sin datos sensibles.
+ * - Protegido por timeout estricto de 2000 ms.
  */
 export async function registrarEventoSistema(input: EventoSistemaInput): Promise<void> {
   try {
     const error = input.error;
-    if (!esFalloServicioCorreo(error)) {
+
+    // Descartar errores de cliente, 429 y validación
+    if (esErrorClienteODescartable(error)) {
       return;
     }
 
+    const esFalloServicio = esFalloServicioCorreo(error);
+    const esExcepcionInterna = !esFalloServicio;
+
     const emailDominio = extraerDominioEmail(input.email);
     const estadoHttp = typeof error?.status === "number" ? error.status : null;
-    const codigoError = typeof error?.code === "string" ? error.code.slice(0, 100) : null;
+
+    let codigoError = typeof error?.code === "string" ? error.code.slice(0, 100) : null;
+    if (esExcepcionInterna) {
+      codigoError = "EXCEPCION_INTERNA";
+    }
+
     const mensajeCrudo = error?.message ? String(error.message) : (error ? String(error) : null);
     const mensajeSanitizado = mensajeCrudo ? sanitizarTextoSeguro(mensajeCrudo) : null;
     const mensajeError = mensajeSanitizado ? mensajeSanitizado.slice(0, 200) : null;
